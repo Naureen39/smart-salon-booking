@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useConversation } from "@/hooks/useConversation";
+import { useVoiceSession } from "@/hooks/useVoiceSession";
 
 interface ChatWidgetProps {
   /** Null when the visitor isn't signed in — the widget shows a sign-in
@@ -12,7 +13,8 @@ interface ChatWidgetProps {
 export default function ChatWidget({ accessToken }: ChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState("");
-  const { messages, sendMessage, isSending, error } = useConversation(accessToken);
+  const { messages, sendMessage, isSending, error, ensureSession, addAssistantMessage } = useConversation(accessToken);
+  const voice = useVoiceSession(accessToken);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -23,6 +25,24 @@ export default function ChatWidget({ accessToken }: ChatWidgetProps) {
     if (isSending) return;
     void sendMessage(text);
     setDraft("");
+  };
+
+  const handleMicToggle = async () => {
+    if (voice.isRecording) {
+      voice.stop();
+      return;
+    }
+    const activeSessionId = await ensureSession();
+    await voice.start(activeSessionId, {
+      onTurn: (turn) => addAssistantMessage(turn.reply_text),
+      onAudio: (audio) => {
+        const blob = new Blob([audio], { type: "audio/wav" });
+        const url = URL.createObjectURL(blob);
+        const player = new Audio(url);
+        void player.play();
+        player.onended = () => URL.revokeObjectURL(url);
+      },
+    });
   };
 
   return (
@@ -50,8 +70,8 @@ export default function ChatWidget({ accessToken }: ChatWidgetProps) {
               <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
                 {messages.length === 0 && (
                   <p className="text-sm text-neutral-500">
-                    Hi! I can help you book an appointment or answer questions — try "book a haircut" or "what are
-                    your hours?"
+                    Hi! I can help you book an appointment or answer questions — try "book a haircut", "what are
+                    your hours?", or tap the mic to talk.
                   </p>
                 )}
                 {messages.map((message) => (
@@ -82,7 +102,8 @@ export default function ChatWidget({ accessToken }: ChatWidgetProps) {
                   </div>
                 ))}
                 {isSending && <p className="text-xs italic text-neutral-400">Thinking…</p>}
-                {error && <p className="text-xs text-red-600">{error}</p>}
+                {voice.isRecording && <p className="text-xs italic text-brand">Listening…</p>}
+                {(error || voice.error) && <p className="text-xs text-red-600">{error ?? voice.error}</p>}
               </div>
 
               <form
@@ -92,6 +113,19 @@ export default function ChatWidget({ accessToken }: ChatWidgetProps) {
                 }}
                 className="flex items-center gap-2 border-t border-neutral-200 p-3"
               >
+                <button
+                  type="button"
+                  onClick={() => void handleMicToggle()}
+                  aria-label={voice.isRecording ? "Stop voice input" : "Start voice input"}
+                  aria-pressed={voice.isRecording}
+                  className={
+                    voice.isRecording
+                      ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-500 text-white"
+                      : "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-300 text-neutral-600 hover:border-brand hover:text-brand"
+                  }
+                >
+                  🎤
+                </button>
                 <input
                   type="text"
                   value={draft}

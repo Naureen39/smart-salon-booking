@@ -23,3 +23,6 @@ joblib==1.4.2
 sentence-transformers==3.3.1
 dateparser==1.2.0
 rapidfuzz==3.10.1
+faster-whisper==1.1.0
+pyttsx3==2.98
+slowapi==0.1.9

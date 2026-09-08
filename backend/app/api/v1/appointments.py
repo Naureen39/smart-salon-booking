@@ -1,7 +1,7 @@
 import uuid
 from datetime import date as date_type
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,7 @@ from app.api.deps import get_current_user
 from app.booking.availability import compute_available_slots
 from app.booking.create import BookingConflictError, ServiceNotFoundError, create_booking
 from app.core.audit import record_audit_event
+from app.core.rate_limit import limiter
 from app.db.models.appointment import Appointment
 from app.db.models.service import Service
 from app.db.models.user import User
@@ -78,7 +79,9 @@ async def get_appointment(
 
 
 @router.post("", response_model=AppointmentRead, status_code=status.HTTP_201_CREATED)
+@limiter.limit("20/minute")
 async def create_appointment(
+    request: Request,
     payload: AppointmentCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),

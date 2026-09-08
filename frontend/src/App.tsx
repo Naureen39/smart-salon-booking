@@ -1,23 +1,23 @@
 import { Route, Routes } from "react-router-dom";
 
 import ChatWidget from "@/components/assistant/ChatWidget";
-
-function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-white">
-      <h1 className="font-display text-4xl text-brand">GlowDesk</h1>
-      <p className="mt-2 text-neutral-600">AI Salon & Spa Booking Platform</p>
-    </main>
-  );
-}
+import About from "@/pages/About";
+import AdminDashboard from "@/pages/AdminDashboard";
+import Contact from "@/pages/Contact";
+import Home from "@/pages/Home";
+import Services from "@/pages/Services";
 
 export default function App() {
   return (
     <>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/services" element={<Services />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
+        {/* accessToken is null until frontend login/auth state is built (not part of Phase 10's scope) */}
+        <Route path="/admin" element={<AdminDashboard accessToken={null} />} />
       </Routes>
-      {/* accessToken is null until Phase 10 wires up real auth/login state */}
       <ChatWidget accessToken={null} />
     </>
   );

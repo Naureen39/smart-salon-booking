@@ -41,8 +41,13 @@ class Settings(BaseSettings):
     # Voice
     whisper_model_size: str = "small"
     whisper_compute_type: str = "int8"
-    tts_engine: str = "openvoice_v2"
+    tts_engine: str = "pyttsx3"
+    # Default is the zero-setup offline fallback (see app/ai/tts.py) rather than
+    # the plan's named "openvoice_v2" — OpenVoice V2 has no clean pip wheel and
+    # needs a manually-downloaded checkpoint, so it can't be the default until
+    # that's provisioned. Set TTS_ENGINE=openvoice_v2 once it is.
     tts_reference_voice_path: str = "/app/assets/brand_voice_sample.wav"
+    tts_checkpoint_dir: str = "/app/assets/openvoice_v2_checkpoint"
 
     # RAG
     embedding_model: str = "BAAI/bge-small-en-v1.5"

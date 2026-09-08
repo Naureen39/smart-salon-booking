@@ -9,7 +9,7 @@ celery_app = Celery(
     "glowdesk",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.ml_tasks", "app.tasks.reminders"],
+    include=["app.tasks.ml_tasks", "app.tasks.reminders", "app.tasks.analytics"],
 )
 celery_app.conf.update(
     task_serializer="json",
@@ -22,5 +22,9 @@ celery_app.conf.beat_schedule = {
     "retrain-no-show-model-weekly": {
         "task": "ml.retrain_no_show_model",
         "schedule": crontab(day_of_week=0, hour=3, minute=0),
+    },
+    "rollup-daily-stats-nightly": {
+        "task": "analytics.rollup_daily_stats",
+        "schedule": crontab(hour=3, minute=30),
     },
 }

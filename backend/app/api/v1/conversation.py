@@ -1,10 +1,12 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.orchestrator import process_turn
 from app.api.deps import get_current_user
+from app.core.config import get_settings
+from app.core.rate_limit import limiter
 from app.db.models.conversation_session import ConversationSession
 from app.db.models.user import User
 from app.db.session import get_db
@@ -16,6 +18,7 @@ from app.schemas.conversation import (
 )
 
 router = APIRouter(prefix="/conversation", tags=["conversation"])
+settings = get_settings()
 
 
 @router.post("/start", response_model=ConversationSessionRead, status_code=status.HTTP_201_CREATED)
@@ -32,7 +35,9 @@ async def start_session(
 
 
 @router.post("/{session_id}/message", response_model=ConversationTurnResponse)
+@limiter.limit(lambda: f"{settings.rate_limit_chat_per_minute}/minute")
 async def send_message(
+    request: Request,
     session_id: uuid.UUID,
     payload: SendMessageRequest,
     db: AsyncSession = Depends(get_db),

@@ -53,5 +53,9 @@ export function useConversation(accessToken: string | null) {
     [accessToken, ensureSession],
   );
 
-  return { messages, sendMessage, isSending, error };
+  const addAssistantMessage = useCallback((text: string, quickReplies?: string[] | null) => {
+    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", text, quickReplies }]);
+  }, []);
+
+  return { messages, sendMessage, isSending, error, sessionId, ensureSession, addAssistantMessage };
 }

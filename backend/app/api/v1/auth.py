@@ -6,8 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.core.audit import record_audit_event
 from app.core.config import get_settings
 from app.core.email import send_email
+from app.core.rate_limit import limiter
 from app.core.redis import get_redis_client
 from app.core.refresh_store import is_refresh_token_valid, revoke_refresh_token, store_refresh_token
 from app.core.security import create_access_token, create_refresh_token, decode_token, hash_password, verify_password
@@ -41,7 +43,8 @@ async def _issue_tokens(response: Response, user: User) -> AccessTokenResponse:
 
 
 @router.post("/signup", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-async def signup(payload: SignupRequest, db: AsyncSession = Depends(get_db)) -> User:
+@limiter.limit("5/minute")
+async def signup(request: Request, payload: SignupRequest, db: AsyncSession = Depends(get_db)) -> User:
     existing = await db.scalar(select(User).where(User.email == payload.email))
     if existing is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
@@ -90,7 +93,10 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)) -> dict[s
 
 
 @router.post("/login", response_model=AccessTokenResponse)
-async def login(payload: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)) -> AccessTokenResponse:
+@limiter.limit("10/minute")
+async def login(
+    request: Request, payload: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)
+) -> AccessTokenResponse:
     invalid_credentials = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
     user = await db.scalar(select(User).where(User.email == payload.email))
@@ -154,3 +160,29 @@ async def logout(request: Request, response: Response) -> dict[str, str]:
 @router.get("/me", response_model=UserRead)
 async def me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_my_data(
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> None:
+    """GDPR-style self-service erasure (docs plan §8). Anonymizes rather than
+    hard-deletes: appointments and audit_log rows reference this user and
+    have their own legitimate retention needs (booking history, security
+    audit trail), so scrubbing PII from the user row — email, name, phone,
+    password — while deactivating the account satisfies "right to erasure"
+    without breaking that referential history. This mirrors how most real
+    GDPR implementations handle records with retention obligations.
+    """
+    anonymized_email = f"deleted-user-{current_user.id}@example.invalid"
+    current_user.email = anonymized_email
+    current_user.full_name = "Deleted User"
+    current_user.phone = None
+    current_user.hashed_password = hash_password(str(uuid.uuid4()))
+    current_user.is_active = False
+    current_user.is_verified = False
+
+    await record_audit_event(
+        db, user_id=current_user.id, action="user.self_deleted", entity="user", entity_id=current_user.id
+    )
+    await db.commit()

@@ -1,6 +1,7 @@
 from app.db.models.appointment import Appointment
 from app.db.models.audit_log import AuditLog
 from app.db.models.conversation_session import ConversationSession
+from app.db.models.daily_booking_stats import DailyBookingStats
 from app.db.models.faq_document import FaqDocument
 from app.db.models.llm_usage import LlmUsage
 from app.db.models.location import Location
@@ -12,6 +13,7 @@ __all__ = [
     "Appointment",
     "AuditLog",
     "ConversationSession",
+    "DailyBookingStats",
     "FaqDocument",
     "LlmUsage",
     "Location",

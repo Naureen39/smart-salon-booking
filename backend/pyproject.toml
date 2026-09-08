@@ -20,6 +20,14 @@ disallow_untyped_defs = false
 module = "dateparser.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# mypy 1.14.0 has an internal crash parsing a specific file inside transformers
+# (a transitive dependency of sentence-transformers) — this isn't our code, so
+# skip analyzing it entirely rather than chase a third-party library bug.
+module = "transformers.*"
+follow_imports = "skip"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

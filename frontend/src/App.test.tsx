@@ -12,6 +12,6 @@ describe("App", () => {
       </BrowserRouter>,
     );
 
-    expect(screen.getByText("GlowDesk")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "GlowDesk" })).toBeInTheDocument();
   });
 });
