@@ -51,43 +51,44 @@ Solving only one half of this problem (a nicer booking UI, or a smarter reminder
 ## Architecture
 
 ```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 35, "rankSpacing": 55, "curve": "basis"}}}%%
 flowchart TB
-    subgraph Client["Client Layer"]
-        WEB["React SPA<br/>Marketing site · Chat widget · Voice widget · Admin dashboard"]
+    subgraph Client["CLIENT LAYER"]
+        WEB["<b>React SPA</b><br/>Marketing site · Login/Signup<br/>Chat &amp; Voice widget · Admin dashboard"]
     end
 
-    subgraph Edge["API Layer: FastAPI"]
+    subgraph Edge["API LAYER (FastAPI)"]
         direction TB
-        AUTH["Auth and RBAC<br/><i>JWT access and refresh, role-checked per request</i>"]
-        BOOK["Booking Engine<br/><i>Availability rules, DB-level double-booking prevention</i>"]
-        ORCH["Conversation Orchestrator<br/><i>Intent and slot state machine</i>"]
-        VOICE["Voice Pipeline<br/><i>STT to VAD to TTS over WebSocket</i>"]
-        ANALYTICS["Analytics API<br/><i>Dashboard queries, at-risk lookups</i>"]
-        RATE["Rate Limiting<br/><i>slowapi, Redis-backed</i>"]
+        AUTH["<b>Auth &amp; RBAC</b><br/><i>JWT access + refresh cookie<br/>role re-checked against the DB every request</i>"]
+        BOOK["<b>Booking Engine</b><br/><i>Availability rules<br/>DB-level double-booking prevention</i>"]
+        ORCH["<b>Conversation Orchestrator</b><br/><i>Rule-first intent &amp; slot state machine</i>"]
+        VOICE["<b>Voice Pipeline</b><br/><i>STT → VAD → TTS over WebSocket</i>"]
+        ANALYTICS["<b>Analytics API</b><br/><i>Dashboard queries, at-risk lookups</i>"]
+        RATE["<b>Rate Limiting</b><br/><i>slowapi, Redis-backed</i>"]
     end
 
-    subgraph AI["AI / ML Layer"]
+    subgraph AI["AI / ML LAYER"]
         direction TB
-        ROUTER["Dual-LLM Router<br/><i>Groq primary, Gemini fallback</i>"]
-        RAG["RAG Retriever<br/><i>pgvector similarity search</i>"]
-        ML["No-Show Risk Model<br/><i>scikit-learn gradient boosting</i>"]
+        ROUTER["<b>Dual-LLM Router</b><br/><i>Groq primary → Gemini fallback</i>"]
+        RAG["<b>RAG Retriever</b><br/><i>pgvector similarity search</i>"]
+        ML["<b>No-Show Risk Model</b><br/><i>scikit-learn gradient boosting</i>"]
     end
 
-    subgraph Async["Async Workers: Celery"]
+    subgraph Async["ASYNC WORKERS (Celery)"]
         direction TB
-        REMIND["Reminder Scheduler<br/><i>risk-weighted timing</i>"]
-        ROLLUP["Analytics Rollups<br/><i>daily aggregation</i>"]
-        RETRAIN["Weekly Model Retraining"]
+        REMIND["<b>Reminder Scheduler</b><br/><i>risk-weighted timing</i>"]
+        ROLLUP["<b>Analytics Rollups</b><br/><i>daily aggregation</i>"]
+        RETRAIN["<b>Weekly Model Retraining</b>"]
     end
 
-    subgraph Data["Data Layer"]
+    subgraph Data["DATA LAYER"]
         direction TB
-        PG[("PostgreSQL 16 + pgvector<br/>bookings · clients · embeddings · audit log")]
-        REDIS[("Redis<br/>cache · Celery broker · rate limits")]
+        PG[("<b>PostgreSQL 16 + pgvector</b><br/>bookings · clients · embeddings · audit log")]
+        REDIS[("<b>Redis</b><br/>cache · Celery broker · rate limits")]
     end
 
-    WEB -- "HTTPS / REST / WebSocket" --> AUTH
-    AUTH --> BOOK
+    WEB ==>|"HTTPS / REST / WebSocket"| AUTH
+    AUTH ==> BOOK
     AUTH --> ORCH
     AUTH --> VOICE
     AUTH --> ANALYTICS
@@ -95,11 +96,11 @@ flowchart TB
 
     ORCH --> RAG
     ORCH --> ROUTER
-    ORCH --> ML
+    ORCH ==> BOOK
     VOICE --> ORCH
-    BOOK --> ML
+    BOOK ==> ML
 
-    BOOK --> PG
+    BOOK ==>|"writes"| PG
     ANALYTICS --> PG
     RAG --> PG
     ML --> PG
@@ -108,24 +109,30 @@ flowchart TB
     ROLLUP --> PG
     RETRAIN --> ML
 
-    Edge -.jobs via.-> REDIS
+    Edge -.schedules jobs.-> REDIS
     Async -.consumes.-> REDIS
     RATE --> REDIS
 
-    classDef client fill:#e0e7ff,stroke:#4338ca,color:#1e1b4b
-    classDef api fill:#dbeafe,stroke:#1d4ed8,color:#1e3a5f
-    classDef ai fill:#fce7f3,stroke:#be185d,color:#831843
-    classDef async fill:#fef3c7,stroke:#b45309,color:#78350f
-    classDef data fill:#d1fae5,stroke:#047857,color:#064e3b
+    classDef client fill:#e0e7ff,stroke:#4338ca,stroke-width:2px,color:#1e1b4b
+    classDef api fill:#dbeafe,stroke:#1d4ed8,stroke-width:2px,color:#1e3a5f
+    classDef ai fill:#fce7f3,stroke:#be185d,stroke-width:2px,color:#831843
+    classDef async fill:#fef3c7,stroke:#b45309,stroke-width:2px,color:#78350f
+    classDef data fill:#d1fae5,stroke:#047857,stroke-width:2px,color:#064e3b
 
     class WEB client
     class AUTH,BOOK,ORCH,VOICE,ANALYTICS,RATE api
     class ROUTER,RAG,ML ai
     class REMIND,ROLLUP,RETRAIN async
     class PG,REDIS data
+
+    style Client fill:#f5f6ff,stroke:#4338ca,stroke-width:1px
+    style Edge fill:#f4f9ff,stroke:#1d4ed8,stroke-width:1px
+    style AI fill:#fdf3f8,stroke:#be185d,stroke-width:1px
+    style Async fill:#fffbeb,stroke:#b45309,stroke-width:1px
+    style Data fill:#f2fbf7,stroke:#047857,stroke-width:1px
 ```
 
-**Request flow, in short:** the React SPA talks to FastAPI exclusively over authenticated HTTPS/WebSocket. The API layer never calls an LLM directly for booking logic: the conversation orchestrator first tries rule-based slot-filling, then RAG for FAQ-shaped questions, and only escalates to the LLM router for genuinely ambiguous free text. Every booking write goes through the booking engine, which relies on a Postgres `EXCLUDE` constraint (not application-level locking) to make double-booking structurally impossible, and immediately triggers a no-show risk score. Celery workers, decoupled from the request/response cycle via Redis, own everything that isn't latency-sensitive: reminders, analytics rollups, and weekly model retraining.
+**Request flow, in short:** the React SPA talks to FastAPI exclusively over authenticated HTTPS/WebSocket (bold arrows above trace the critical booking path). The API layer never calls an LLM directly for booking logic: the conversation orchestrator first tries rule-based slot-filling, then RAG for FAQ-shaped questions, and only escalates to the LLM router for genuinely ambiguous free text. Every booking write goes through the booking engine, which relies on a Postgres `EXCLUDE` constraint (not application-level locking) to make double-booking structurally impossible, and immediately triggers a no-show risk score. Celery workers, decoupled from the request/response cycle via Redis, own everything that isn't latency-sensitive: reminders, analytics rollups, and weekly model retraining.
 
 ## Engineering Highlights
 

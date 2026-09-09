@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import SiteLayout from "@/components/layout/SiteLayout";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth";
 
 export default function Signup() {
@@ -22,8 +23,8 @@ export default function Signup() {
     try {
       await signup({ email, password, full_name: fullName });
       navigate("/");
-    } catch {
-      setError("Couldn't create your account. That email may already be registered, or the password is too short.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't create your account. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

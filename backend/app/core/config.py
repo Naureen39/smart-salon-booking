@@ -29,8 +29,14 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     groq_model: str = "openai/gpt-oss-20b"
     gemini_api_key: str = ""
-    gemini_model_primary: str = "gemini-2.5-flash"
-    gemini_model_lite: str = "gemini-2.5-flash-lite"
+    # "-latest" aliases, not a pinned version: gemini-2.5-flash was found (in
+    # manual end-to-end testing) to return 404 "no longer available to new
+    # users" despite still being a real, listed model, exactly the kind of
+    # silent staleness a fallback provider shouldn't be vulnerable to. Gemini
+    # here is the failover path, not the quality-critical one, so trading a
+    # pinned version for one that can't go stale is the right tradeoff.
+    gemini_model_primary: str = "gemini-flash-latest"
+    gemini_model_lite: str = "gemini-flash-lite-latest"
     # Free-tier daily request ceilings the router proactively switches away from
     # before hitting a hard 429 (docs plan §9.4). Groq's published free tier is
     # 1,000 RPD; Gemini's isn't stated as precisely in the plan, so 1500 is a

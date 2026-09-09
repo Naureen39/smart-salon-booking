@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import SiteLayout from "@/components/layout/SiteLayout";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth";
 
 export default function Login() {
@@ -21,8 +22,8 @@ export default function Login() {
     try {
       await login(email, password);
       navigate("/");
-    } catch {
-      setError("Incorrect email or password. Please try again.");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
