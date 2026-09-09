@@ -4,7 +4,7 @@ import { useConversation } from "@/hooks/useConversation";
 import { useVoiceSession } from "@/hooks/useVoiceSession";
 
 interface ChatWidgetProps {
-  /** Null when the visitor isn't signed in — the widget shows a sign-in
+  /** Null when the visitor isn't signed in: the widget shows a sign-in
    * prompt instead of a chat panel (auth pages/state land in a later phase;
    * this prop is the wiring point for them). */
   accessToken: string | null;
@@ -70,7 +70,7 @@ export default function ChatWidget({ accessToken }: ChatWidgetProps) {
               <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
                 {messages.length === 0 && (
                   <p className="text-sm text-neutral-500">
-                    Hi! I can help you book an appointment or answer questions — try "book a haircut", "what are
+                    Hi! I can help you book an appointment or answer questions, try "book a haircut", "what are
                     your hours?", or tap the mic to talk.
                   </p>
                 )}

@@ -17,17 +17,18 @@ REST endpoints from Phase 2).
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.extractors import TIME_WINDOWS, extract_date, extract_time_window, match_service
+from app.ai.extractors import TIME_WINDOWS, extract_date, extract_specific_time, extract_time_window, match_service
 from app.ai.llm_router import LLMRouter, get_default_router
 from app.ai.rag import FaqMatch, answer_faq
 from app.booking.availability import AvailableSlot, compute_available_slots
 from app.booking.create import BookingConflictError, create_booking
 from app.db.models.conversation_session import ConversationSession
+from app.db.models.location import Location
 from app.db.models.service import Service
 
 REQUIRED_SLOTS = ("service", "date")
@@ -53,14 +54,20 @@ EXTRACTION_SYSTEM_PROMPT = (
 )
 
 CONFIRMATION_SYSTEM_PROMPT = (
-    "You are a friendly salon booking assistant. Write a short (under 40 words) warm confirmation "
-    "message for a just-booked appointment. No placeholders, no brackets."
+    "You are a friendly salon booking assistant. Write one or two brief, warm sentences confirming a "
+    "just-booked appointment. No placeholders, no brackets."
 )
+# "one or two brief sentences", not a numeric word count: a numeric
+# constraint like "under 40 words" was observed, in manual end-to-end
+# testing, to push the reasoning model into literally counting words in its
+# hidden reasoning trace, sometimes consuming the entire token budget before
+# any visible content and returning it blank. See GroqProvider's
+# reasoning_effort setting for the other half of this fix.
 
 FAQ_GROUNDING_SYSTEM_PROMPT = (
-    "You are a salon's FAQ assistant. Answer the user's question using ONLY the context below. "
-    "If the context doesn't contain the answer, say you'll check with staff and follow up. "
-    "Keep the answer under 40 words."
+    "You are a salon's FAQ assistant. Answer the user's question using ONLY the context below, in one "
+    "or two brief sentences. If the context doesn't contain the answer, say you'll check with staff "
+    "and follow up."
 )
 
 
@@ -90,9 +97,11 @@ def _match_presented_slot(message: str, presented_slots: list[dict]) -> dict | N
                 return presented_slots[index]
 
     for slot in presented_slots:
-        start = datetime.fromisoformat(slot["start"])
-        time_str = start.strftime("%I:%M %p").lower().lstrip("0")
-        if time_str in lowered:
+        # Falls back to a bare-time label for slots persisted before "label"
+        # existed (an in-flight conversation whose state was written by an
+        # older deployment) rather than raising a KeyError.
+        label = slot.get("label") or datetime.fromisoformat(slot["start"]).strftime("%I:%M %p")
+        if label.lower().lstrip("0") in lowered:
             return slot
     return None
 
@@ -103,6 +112,18 @@ def _filter_by_time_window(slots: list[AvailableSlot], window: str | None) -> li
         return slots
     start_hour, end_hour = bounds
     return [slot for slot in slots if start_hour <= slot.start.hour < end_hour]
+
+
+def _closest_to_requested_time(slots: list[AvailableSlot], requested: time | None) -> list[AvailableSlot]:
+    """Sorts by proximity to an explicit requested clock time (e.g. "3pm"), so
+    a specific request surfaces the nearest real openings first instead of
+    always the day's earliest slots — `slots` is already in chronological
+    order when no specific time was requested, so that ordering is preserved.
+    """
+    if requested is None:
+        return slots
+    requested_minutes = requested.hour * 60 + requested.minute
+    return sorted(slots, key=lambda slot: abs((slot.start.hour * 60 + slot.start.minute) - requested_minutes))
 
 
 def _templated_missing_slot_prompt(missing: list[str]) -> str:
@@ -118,6 +139,13 @@ def _templated_missing_slot_prompt(missing: list[str]) -> str:
 async def _get_active_service_names(db: AsyncSession) -> list[str]:
     result = await db.scalars(select(Service.name).where(Service.is_active.is_(True)))
     return list(result)
+
+
+async def _location_names_by_id(db: AsyncSession, location_ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    if not location_ids:
+        return {}
+    locations = await db.scalars(select(Location).where(Location.id.in_(location_ids)))
+    return {location.id: location.name for location in locations}
 
 
 async def _find_service_by_name(db: AsyncSession, name: str) -> Service | None:
@@ -153,7 +181,7 @@ async def _generate_confirmation_message(
 ) -> str:
     user_message = f"Service: {service_name}\nDate/time: {start.strftime('%A, %B %d at %I:%M %p')}"
     return await router.complete(
-        db, system=CONFIRMATION_SYSTEM_PROMPT, user=user_message, purpose="booking_confirmation", max_tokens=60
+        db, system=CONFIRMATION_SYSTEM_PROMPT, user=user_message, purpose="booking_confirmation", max_tokens=100
     )
 
 
@@ -162,7 +190,7 @@ def _make_faq_llm_fallback(router: LLMRouter, db: AsyncSession):
         context = "\n".join(f"Q: {match.question}\nA: {match.answer}" for match in matches)
         user_message = f"Context:\n{context}\n\nQuestion: {query}"
         return await router.complete(
-            db, system=FAQ_GROUNDING_SYSTEM_PROMPT, user=user_message, purpose="faq_grounded_answer", max_tokens=100
+            db, system=FAQ_GROUNDING_SYSTEM_PROMPT, user=user_message, purpose="faq_grounded_answer", max_tokens=200
         )
 
     return _fallback
@@ -237,14 +265,14 @@ async def _process_booking_turn(
     if presented_slots:
         chosen = _match_presented_slot(message, presented_slots)
         if chosen is not None:
+            chosen_start = datetime.fromisoformat(chosen["start"])
             try:
                 appointment = await create_booking(
                     db,
                     client_id=client_id,
                     service_id=uuid.UUID(chosen["service_id"]),
                     staff_id=uuid.UUID(chosen["staff_id"]),
-                    location_id=None,
-                    scheduled_start=datetime.fromisoformat(chosen["start"]),
+                    scheduled_start=chosen_start,
                     booking_channel="chat",
                 )
             except BookingConflictError:
@@ -259,8 +287,16 @@ async def _process_booking_turn(
 
             llm_calls += 1
             service = await db.get(Service, appointment.service_id)
+            # chosen_start, not appointment.scheduled_start: SQLAlchemy
+            # refreshes the appointment from Postgres after insert, and a
+            # `timestamptz` column always reads back UTC-normalized
+            # regardless of the location's real timezone (found in manual
+            # end-to-end testing: a 12:00 PM Pacific booking was confirmed
+            # back to the client as "7 PM", its UTC hour, formatted as if it
+            # were already local). chosen_start is the same instant, still
+            # carrying the offset it was actually presented and booked in.
             confirmation = await _generate_confirmation_message(
-                router, db, service.name if service else "your service", appointment.scheduled_start
+                router, db, service.name if service else "your service", chosen_start
             )
             state = _fresh_state(state.get("turn_count", 0) + 1)
             await _persist_state(db, session, state)
@@ -278,6 +314,9 @@ async def _process_booking_turn(
     time_window = extract_time_window(message)
     if time_window:
         slots["time_window"] = time_window
+    specific_time = extract_specific_time(message)
+    if specific_time:
+        slots["specific_time"] = specific_time.isoformat()
 
     missing = [slot_name for slot_name in REQUIRED_SLOTS if not slots.get(slot_name)]
 
@@ -325,27 +364,43 @@ async def _process_booking_turn(
             state=state,
         )
 
-    top_options = available[:3]
+    requested_time = time.fromisoformat(slots["specific_time"]) if slots.get("specific_time") else None
+    top_options = _closest_to_requested_time(available, requested_time)[:3]
+
+    # Only worth naming the location per-option when the presented slots
+    # actually span more than one — the common single-location case (and any
+    # multi-location business whose top matches happen to share one) stays as
+    # plain times, so this never adds noise for the setup most deployments
+    # actually have. Naming it also disambiguates two slots that land on the
+    # same clock time at different locations, which quick-reply matching
+    # would otherwise have no way to tell apart.
+    distinct_locations = {option.location_id for option in top_options if option.location_id}
+    location_names = await _location_names_by_id(db, distinct_locations) if len(distinct_locations) > 1 else {}
+
+    def _option_label(option: AvailableSlot) -> str:
+        time_label = option.start.strftime("%I:%M %p")
+        if option.location_id and option.location_id in location_names:
+            return f"{time_label} at {location_names[option.location_id]}"
+        return time_label
+
+    labels = [_option_label(option) for option in top_options]
     presented = [
         {
             "staff_id": str(option.staff_id),
             "service_id": str(service.id),
+            "location_id": str(option.location_id) if option.location_id else None,
             "start": option.start.isoformat(),
             "end": option.end.isoformat(),
+            "label": label,
         }
-        for option in top_options
+        for option, label in zip(top_options, labels, strict=True)
     ]
     state["presented_slots"] = presented
     await _persist_state(db, session, state)
 
-    options_text = "\n".join(f"{i + 1}. {option.start.strftime('%I:%M %p')}" for i, option in enumerate(top_options))
+    options_text = "\n".join(f"{i + 1}. {label}" for i, label in enumerate(labels))
     reply_text = (
         f"Here are some open times for {service.name} on {target_date.strftime('%A, %B %d')}:\n"
         f"{options_text}\nWhich works best?"
     )
-    return TurnResult(
-        reply_text=reply_text,
-        llm_calls=llm_calls,
-        state=state,
-        quick_replies=[option.start.strftime("%I:%M %p") for option in top_options],
-    )
+    return TurnResult(reply_text=reply_text, llm_calls=llm_calls, state=state, quick_replies=labels)

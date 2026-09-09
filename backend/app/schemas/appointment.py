@@ -13,7 +13,6 @@ def _require_timezone(value: datetime) -> datetime:
 class AppointmentCreate(BaseModel):
     service_id: uuid.UUID
     staff_id: uuid.UUID
-    location_id: uuid.UUID | None = None
     scheduled_start: datetime
     booking_channel: str = "web"
 
@@ -47,5 +46,6 @@ class AppointmentRead(BaseModel):
 
 class AvailableSlotRead(BaseModel):
     staff_id: uuid.UUID
+    location_id: uuid.UUID | None
     start: datetime
     end: datetime

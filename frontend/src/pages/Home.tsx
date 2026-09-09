@@ -4,21 +4,23 @@ import { Link } from "react-router-dom";
 
 import SiteLayout from "@/components/layout/SiteLayout";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { serviceImage } from "@/lib/service-images";
 import { formatPrice, listServices, type Service } from "@/lib/services-api";
 
-// Placeholder imagery (Lorem Picsum — free-to-use stock photography) until the
-// salon's own photography is available; see docs plan §11.2's "real
-// photography, never scrape copyrighted images" guidance.
-const HERO_IMAGE = "https://picsum.photos/seed/glowdesk-hero/1200/800";
+// Real, verified salon photography (Unsplash, free license, no attribution
+// required) picked to actually match the subject: no random unrelated stock
+// photo, no competing business's branding visible in frame.
+const HERO_IMAGE = "https://images.unsplash.com/photo-1746723378067-83a345ff3160?q=80&w=1400&auto=format&fit=crop";
+const SPACE_IMAGE = "https://images.unsplash.com/photo-1781450090585-1a511b7066d9?q=80&w=1600&auto=format&fit=crop";
 
 const VALUE_PROPS = [
   {
     title: "Book in seconds",
-    body: "Chat, talk, or click — our AI assistant fills in the details and finds you a time that works.",
+    body: "Chat, talk, or click: our AI assistant fills in the details and finds you a time that works.",
   },
   {
     title: "Fewer no-shows",
-    body: "Smart reminders, timed by how likely you are to forget, keep your seat — and ours — reserved.",
+    body: "Smart reminders, timed by how likely you are to forget, keep your seat (and ours) reserved.",
   },
   {
     title: "Expert care",
@@ -28,7 +30,7 @@ const VALUE_PROPS = [
 
 const TESTIMONIALS = [
   { name: "Amara T.", quote: "Booked my haircut through the chat widget in under a minute. So easy." },
-  { name: "Priya K.", quote: "The reminder texts are a lifesaver — I never double-book myself anymore." },
+  { name: "Priya K.", quote: "The reminder texts are a lifesaver. I never double-book myself anymore." },
   { name: "Jordan L.", quote: "Best color I've had in years. The team really listens." },
 ];
 
@@ -55,7 +57,7 @@ export default function Home() {
             Look and feel your <span className="text-brand">best</span>.
           </h1>
           <p className="mt-4 max-w-md text-lg text-neutral-600">
-            GlowDesk brings expert hair, nail, and spa care to your schedule — book by web, chat, or voice, and
+            GlowDesk brings expert hair, nail, and spa care to your schedule: book by web, chat, or voice, and
             we'll handle the rest.
           </p>
           <div className="mt-8 flex flex-wrap gap-4">
@@ -75,7 +77,7 @@ export default function Home() {
         </motion.div>
         <motion.img
           src={HERO_IMAGE}
-          alt="Bright, modern salon interior with styling chairs and warm lighting"
+          alt="Bright, modern salon with a stylist attending a client, surrounded by shelves of styling products"
           className="h-72 w-full rounded-3xl object-cover shadow-lg sm:h-96"
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -109,11 +111,25 @@ export default function Home() {
           <h2 className="font-display text-2xl text-neutral-900">Featured services</h2>
           <div className="mt-6 grid gap-6 sm:grid-cols-3">
             {featuredServices.map((service) => (
-              <div key={service.id} className="rounded-2xl border border-neutral-200 p-5">
-                <p className="font-display text-lg text-neutral-900">{service.name}</p>
-                <p className="mt-1 text-sm text-neutral-500">{service.duration_minutes} min</p>
-                <p className="mt-3 text-xl font-semibold text-brand">{formatPrice(service.price_cents)}</p>
-              </div>
+              <Link
+                key={service.id}
+                to="/services"
+                className="group overflow-hidden rounded-2xl border border-neutral-200 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <div className="h-40 w-full overflow-hidden">
+                  <img
+                    src={serviceImage(service)}
+                    alt={service.name}
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="p-5">
+                  <p className="font-display text-lg text-neutral-900">{service.name}</p>
+                  <p className="mt-1 text-sm text-neutral-500">{service.duration_minutes} min</p>
+                  <p className="mt-3 text-xl font-semibold text-brand">{formatPrice(service.price_cents)}</p>
+                </div>
+              </Link>
             ))}
           </div>
           <Link to="/services" className="mt-6 inline-block text-sm font-medium text-brand hover:underline">
@@ -122,6 +138,22 @@ export default function Home() {
         </section>
       )}
 
+      <section className="relative">
+        <img
+          src={SPACE_IMAGE}
+          alt="Elegant, softly lit salon interior with arched mirror alcoves and styling chairs"
+          className="h-80 w-full object-cover sm:h-[28rem]"
+          loading="lazy"
+        />
+        <div className="absolute inset-0 flex items-center bg-black/35">
+          <div className="mx-auto max-w-6xl px-6">
+            <p className="max-w-md font-display text-2xl text-white sm:text-3xl">
+              A space designed for you to relax, unwind, and leave feeling like yourself again.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section className="bg-neutral-50 py-16">
         <div className="mx-auto max-w-6xl px-6">
           <h2 className="font-display text-2xl text-neutral-900">What clients say</h2>
@@ -129,7 +161,7 @@ export default function Home() {
             {TESTIMONIALS.map((testimonial) => (
               <blockquote key={testimonial.name} className="rounded-2xl bg-white p-6 shadow-sm">
                 <p className="text-sm italic text-neutral-600">"{testimonial.quote}"</p>
-                <footer className="mt-3 text-sm font-medium text-neutral-800">— {testimonial.name}</footer>
+                <footer className="mt-3 text-sm font-medium text-neutral-800">- {testimonial.name}</footer>
               </blockquote>
             ))}
           </div>

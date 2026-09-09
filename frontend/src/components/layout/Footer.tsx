@@ -5,7 +5,7 @@ export default function Footer() {
         <div>
           <p className="font-display text-lg text-brand">GlowDesk</p>
           <p className="mt-2 text-sm text-neutral-500">
-            Salon &amp; spa booking made effortless — by web, chat, or voice.
+            Salon &amp; spa booking made effortless: by web, chat, or voice.
           </p>
         </div>
         <div>

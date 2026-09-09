@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
 
     # Database
-    database_url: str = "postgresql+asyncpg://glowdesk:glowdesk@localhost:5432/glowdesk"
+    database_url: str = "postgresql+asyncpg://glowdesk:glowdesk@localhost:5433/glowdesk"
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"

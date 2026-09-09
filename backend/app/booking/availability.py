@@ -20,6 +20,7 @@ _WEEKDAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 @dataclass(frozen=True)
 class AvailableSlot:
     staff_id: uuid.UUID
+    location_id: uuid.UUID | None
     start: datetime
     end: datetime
 
@@ -62,20 +63,31 @@ async def compute_available_slots(
     if not staff_profiles:
         return []
 
-    tzinfo = ZoneInfo("UTC")
-    if location_id is not None:
-        location = await db.get(Location, location_id)
-        if location is not None:
-            tzinfo = ZoneInfo(location.timezone)
-
-    day_start = datetime.combine(target_date, time.min, tzinfo=tzinfo)
-    day_end = day_start + timedelta(days=1)
+    # Resolved per staff member, not once for the whole call: a multi-location
+    # business has staff whose working_hours are in *their own* location's
+    # local time, not a single timezone shared by everyone. Callers that don't
+    # (or can't) pre-filter to one location — the conversation orchestrator
+    # never has — used to silently get every staff member's hours interpreted
+    # as UTC, which is only correct by coincidence when a location's timezone
+    # actually is UTC.
+    referenced_location_ids = {staff.location_id for staff in staff_profiles if staff.location_id is not None}
+    locations_by_id = (
+        {loc.id: loc for loc in await db.scalars(select(Location).where(Location.id.in_(referenced_location_ids)))}
+        if referenced_location_ids
+        else {}
+    )
 
     slots: list[AvailableSlot] = []
     for staff in staff_profiles:
+        location = locations_by_id.get(staff.location_id) if staff.location_id else None
+        tzinfo = ZoneInfo(location.timezone) if location is not None else ZoneInfo("UTC")
+
         windows = _day_windows(staff.working_hours, target_date)
         if not windows:
             continue
+
+        day_start = datetime.combine(target_date, time.min, tzinfo=tzinfo)
+        day_end = day_start + timedelta(days=1)
 
         existing = list(
             await db.scalars(
@@ -98,7 +110,11 @@ async def compute_available_slots(
                     cursor < appt.scheduled_end and candidate_end > appt.scheduled_start for appt in existing
                 )
                 if not overlaps:
-                    slots.append(AvailableSlot(staff_id=staff.id, start=cursor, end=candidate_end))
+                    slots.append(
+                        AvailableSlot(
+                            staff_id=staff.id, location_id=staff.location_id, start=cursor, end=candidate_end
+                        )
+                    )
                 cursor += timedelta(minutes=SLOT_GRANULARITY_MINUTES)
 
     slots.sort(key=lambda slot: (slot.start, str(slot.staff_id)))

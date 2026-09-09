@@ -1,5 +1,7 @@
 import { NavLink } from "react-router-dom";
 
+import { useAuthStore } from "@/store/auth";
+
 const links = [
   { to: "/", label: "Home" },
   { to: "/services", label: "Services" },
@@ -14,6 +16,9 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 }
 
 export default function Navbar() {
+  const user = useAuthStore((state) => state.user);
+  const logout = useAuthStore((state) => state.logout);
+
   return (
     <header className="sticky top-0 z-40 border-b border-neutral-100 bg-white/90 backdrop-blur">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
@@ -27,12 +32,27 @@ export default function Navbar() {
             </NavLink>
           ))}
         </div>
-        <NavLink
-          to="/services"
-          className="rounded-full bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-light"
-        >
-          Book Now
-        </NavLink>
+        <div className="flex items-center gap-4">
+          {user ? (
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="hidden text-sm font-medium text-neutral-600 hover:text-brand sm:inline"
+            >
+              Sign Out ({user.full_name.split(" ")[0]})
+            </button>
+          ) : (
+            <NavLink to="/login" className="hidden text-sm font-medium text-neutral-600 hover:text-brand sm:inline">
+              Sign In
+            </NavLink>
+          )}
+          <NavLink
+            to="/services"
+            className="rounded-full bg-brand px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-brand-light"
+          >
+            Book Now
+          </NavLink>
+        </div>
       </nav>
     </header>
   );

@@ -218,7 +218,7 @@ export default function AdminDashboard({ accessToken }: AdminDashboardProps) {
                         {reminderStatus[appointment.appointment_id] === "sent"
                           ? "Sent ✓"
                           : reminderStatus[appointment.appointment_id] === "error"
-                            ? "Failed — retry"
+                            ? "Failed, retry"
                             : "Send reminder"}
                       </button>
                     </td>

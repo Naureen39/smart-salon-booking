@@ -3,7 +3,7 @@ import { type FormEvent, useState } from "react";
 import SiteLayout from "@/components/layout/SiteLayout";
 import { usePageTitle } from "@/hooks/usePageTitle";
 
-// OpenStreetMap embed — no API key required, unlike Google Maps. Coordinates
+// OpenStreetMap embed, no API key required, unlike Google Maps. Coordinates
 // are a placeholder pin pending the salon's real address being finalized.
 const MAP_EMBED_SRC =
   "https://www.openstreetmap.org/export/embed.html?bbox=-122.42%2C37.77%2C-122.40%2C37.79&layer=mapnik";
@@ -16,7 +16,7 @@ export default function Contact() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     // No backend endpoint exists yet for contact-form submissions (out of
-    // scope for this phase) — mailto is an honest, working stand-in rather
+    // scope for this phase): mailto is an honest, working stand-in rather
     // than a form that silently does nothing.
     const subject = encodeURIComponent(`Message from ${form.name || "website visitor"}`);
     const body = encodeURIComponent(`${form.message}\n\nReply to: ${form.email}`);
@@ -29,7 +29,7 @@ export default function Contact() {
       <section className="mx-auto max-w-6xl px-6 py-16">
         <h1 className="font-display text-4xl text-neutral-900">Get in Touch</h1>
         <p className="mt-3 max-w-2xl text-neutral-600">
-          Questions about a service, a booking, or just want to say hi? Reach out — we usually reply within a
+          Questions about a service, a booking, or just want to say hi? Reach out, we usually reply within a
           business day.
         </p>
 

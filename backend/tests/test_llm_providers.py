@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -25,6 +27,33 @@ async def test_groq_provider_parses_successful_response() -> None:
     assert response.text == "hello"
     assert response.tokens_in == 10
     assert response.tokens_out == 5
+
+
+async def test_groq_provider_requests_low_reasoning_effort() -> None:
+    """Regression test for a real bug found in manual end-to-end testing: the
+    default model (gpt-oss-20b) is a reasoning model that can spend its
+    entire max_tokens budget on a hidden reasoning trace, especially when the
+    prompt has a numeric constraint like "under 40 words", and return blank
+    visible content despite a 200 response. Requesting low reasoning effort
+    fixed it (observed ~130 reasoning tokens dropping to single digits).
+    """
+    captured_payload: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal captured_payload
+        captured_payload = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "hi"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+            },
+        )
+
+    provider = GroqProvider(api_key="test-key", transport=httpx.MockTransport(handler))
+    await provider.complete("sys", "hi", max_tokens=100, json_mode=False)
+
+    assert captured_payload.get("reasoning_effort") == "low"
 
 
 async def test_groq_provider_raises_retryable_error_on_429() -> None:

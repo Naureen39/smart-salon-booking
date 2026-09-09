@@ -93,9 +93,18 @@ async def get_overview(
     no_show_rate = (no_show_count / total_bookings) if total_bookings else 0.0
 
     period_start_dt = datetime.combine(period_start, datetime.min.time(), tzinfo=UTC)
+    now = datetime.now(UTC)
     avg_lead_time = (
         await db.execute(
-            select(func.avg(Appointment.lead_time_hours)).where(Appointment.scheduled_start >= period_start_dt)
+            select(func.avg(Appointment.lead_time_hours)).where(
+                Appointment.scheduled_start >= period_start_dt,
+                # Upper-bounded to match total_bookings/no_show_rate's window (the
+                # daily_booking_stats rollup only ever covers already-elapsed days) —
+                # without this, an unbounded query silently mixes in every future
+                # booking, which can make a "0 bookings this period" card show a
+                # large, unrelated average lead time next to it.
+                Appointment.scheduled_start < now,
+            )
         )
     ).scalar_one()
 
@@ -152,6 +161,9 @@ async def get_service_popularity(
     period_start_dt = datetime.combine(
         datetime.now(UTC).date() - timedelta(days=days), datetime.min.time(), tzinfo=UTC
     )
+    # Upper-bounded to "now" (see the matching fix in get_overview) — without
+    # this, every future-dated booking leaks into every period, so choosing a
+    # different `days` window barely changes the result.
     rows = await db.execute(
         select(
             Service.id,
@@ -161,7 +173,11 @@ async def get_service_popularity(
         )
         .select_from(Appointment)
         .join(Service, Appointment.service_id == Service.id)
-        .where(Appointment.scheduled_start >= period_start_dt, Appointment.status != "cancelled")
+        .where(
+            Appointment.scheduled_start >= period_start_dt,
+            Appointment.scheduled_start < datetime.now(UTC),
+            Appointment.status != "cancelled",
+        )
         .group_by(Service.id, Service.name)
         .order_by(func.count(Appointment.id).desc())
     )
@@ -193,6 +209,12 @@ async def get_staff_utilization(
                 ).where(
                     Appointment.staff_id == staff.id,
                     Appointment.scheduled_start >= period_start_dt,
+                    # Matches _compute_available_hours' own [period_start, period_end)
+                    # exclusive range below, so booked_hours / available_hours stay
+                    # comparable — otherwise a future booking inflates booked_hours
+                    # for a window whose available_hours denominator never counted
+                    # that day at all.
+                    Appointment.scheduled_start < datetime.combine(period_end, datetime.min.time(), tzinfo=UTC),
                     Appointment.status != "cancelled",
                 )
             )

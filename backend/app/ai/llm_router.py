@@ -48,6 +48,25 @@ def _is_valid_json(text: str) -> bool:
     return True
 
 
+def _is_blank(text: str) -> bool:
+    return not text.strip()
+
+
+def _is_usable(text: str, *, json_mode: bool) -> bool:
+    """A response is unusable if it's blank, or (in json_mode) not valid JSON.
+
+    Blank applies regardless of mode: a reasoning model (e.g. Groq's
+    gpt-oss-20b, this project's configured default) can spend its entire
+    max_tokens budget on an internal reasoning trace and return an empty
+    visible `content`, which is a real failure mode found in manual testing
+    of a live booking confirmation, not a hypothetical one, and is stochastic
+    enough that a second attempt often succeeds.
+    """
+    if _is_blank(text):
+        return False
+    return not json_mode or _is_valid_json(text)
+
+
 class LLMRouter:
     def __init__(self, primary: LLMProvider, fallback: LLMProvider) -> None:
         self.primary = primary
@@ -175,22 +194,28 @@ class LLMRouter:
         if response is None or successful_provider is None:
             return CANNED_JSON_FALLBACK if json_mode else CANNED_TEXT_FALLBACK
 
-        if not json_mode or _is_valid_json(response.text):
+        if _is_usable(response.text, json_mode=json_mode):
             return response.text
 
+        # One retry, same provider. json_mode additionally gets a stricter
+        # formatting instruction (that failure is about output shape); a
+        # blank response isn't a formatting problem, so a plain retry is
+        # what actually gives the model a fresh chance at a shorter
+        # reasoning trace.
+        retry_system = system + STRICT_JSON_INSTRUCTION if json_mode else system
         retry_response = await self._try_provider(
             db,
             successful_provider,
-            system=system + STRICT_JSON_INSTRUCTION,
+            system=retry_system,
             user=user,
             purpose=purpose,
             max_tokens=max_tokens,
             json_mode=json_mode,
         )
-        if retry_response is not None and _is_valid_json(retry_response.text):
+        if retry_response is not None and _is_usable(retry_response.text, json_mode=json_mode):
             return retry_response.text
 
-        return CANNED_JSON_FALLBACK
+        return CANNED_JSON_FALLBACK if json_mode else CANNED_TEXT_FALLBACK
 
 
 def get_default_router() -> LLMRouter:

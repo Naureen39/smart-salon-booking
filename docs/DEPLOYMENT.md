@@ -13,9 +13,9 @@ This follows the plan's host-agnostic, 100%-free-tier architecture (docs plan §
 | Celery beat | Render or Fly.io | same image, `celery beat` start command |
 | Frontend (static build) | Vercel, Netlify, or Cloudflare Pages | `frontend/dist` after `npm run build` |
 
-The backend image is larger than a typical FastAPI service because it bundles the ML stack (scikit-learn, sentence-transformers/transformers, faster-whisper) — budget for a slower first deploy and check your host's image size limit if it's unusually restrictive.
+The backend image is larger than a typical FastAPI service because it bundles the ML stack (scikit-learn, sentence-transformers/transformers, faster-whisper); budget for a slower first deploy and check your host's image size limit if it's unusually restrictive.
 
-## 1. Database — Supabase (Postgres + pgvector)
+## 1. Database: Supabase (Postgres + pgvector)
 
 1. Create a project at [supabase.com](https://supabase.com) (free tier).
 2. In the SQL editor, confirm the `vector` extension is available (Supabase ships it by default; `CREATE EXTENSION IF NOT EXISTS vector;` is also run automatically by migration `0001`).
@@ -29,14 +29,14 @@ The backend image is larger than a typical FastAPI service because it bundles th
    DATABASE_URL="postgresql+asyncpg://..." alembic upgrade head
    ```
 5. **Least-privilege role**: run `infra/scripts/create_restricted_db_role.sql` (adjust the password) and point the app's `DATABASE_URL` at that role instead of the Supabase owner role, per `docs/SECURITY_CHECKLIST.md`.
-6. **Backups**: Supabase's free tier includes managed daily backups with a short retention window — `infra/scripts/backup_db.sh` is only needed if you self-host Postgres instead.
+6. **Backups**: Supabase's free tier includes managed daily backups with a short retention window; `infra/scripts/backup_db.sh` is only needed if you self-host Postgres instead.
 
-## 2. Redis — Upstash
+## 2. Redis: Upstash
 
 1. Create a free Redis database at [upstash.com](https://upstash.com).
-2. Copy the `rediss://` (TLS) connection string it gives you — use it directly as `REDIS_URL`.
+2. Copy the `rediss://` (TLS) connection string it gives you and use it directly as `REDIS_URL`.
 
-## 3. Backend — Render or Fly.io
+## 3. Backend: Render or Fly.io
 
 Both work from the existing `backend/Dockerfile` unchanged.
 
@@ -50,7 +50,7 @@ Both work from the existing `backend/Dockerfile` unchanged.
 
 **Fly.io** follows the same pattern: one `fly.toml` app for the web process, and `fly.toml` `[processes]` entries (or separate apps) for `worker` and `beat` using the same image with different `cmd`.
 
-## 4. Frontend — Vercel / Netlify / Cloudflare Pages
+## 4. Frontend: Vercel / Netlify / Cloudflare Pages
 
 1. Connect the repo, set the root directory to `frontend`.
 2. Build command: `npm run build`. Output directory: `dist`.
@@ -61,13 +61,13 @@ Both work from the existing `backend/Dockerfile` unchanged.
 
 Every variable is documented in `.env.example` at the repo root. In each host's secret manager (Render/Fly.io "Environment", Vercel "Environment Variables", etc.), set at minimum:
 
-- `SECRET_KEY` — a fresh, random 256-bit value (`python -c "import secrets; print(secrets.token_urlsafe(32))"`). Never reuse the local dev value.
-- `DATABASE_URL`, `REDIS_URL` — from steps 1–2.
-- `GROQ_API_KEY`, `GEMINI_API_KEY` — free-tier keys from each provider's console.
-- `CORS_ORIGINS` — the deployed frontend's exact origin.
-- `ENVIRONMENT=production` — flips the refresh-token cookie's `Secure` flag on (see `app/api/v1/auth.py`).
+- `SECRET_KEY`: a fresh, random 256-bit value (`python -c "import secrets; print(secrets.token_urlsafe(32))"`). Never reuse the local dev value.
+- `DATABASE_URL`, `REDIS_URL`: from steps 1-2.
+- `GROQ_API_KEY`, `GEMINI_API_KEY`: free-tier keys from each provider's console.
+- `CORS_ORIGINS`: the deployed frontend's exact origin.
+- `ENVIRONMENT=production`: flips the refresh-token cookie's `Secure` flag on (see `app/api/v1/auth.py`).
 
-Never commit real values for any of these — `.env` is gitignored specifically so this mistake isn't possible by accident.
+Never commit real values for any of these; `.env` is gitignored specifically so this mistake isn't possible by accident.
 
 ## 6. Post-deploy smoke test
 
@@ -79,7 +79,7 @@ Once all pieces are live, walk through this by hand (matches the plan's Definiti
 4. Confirm the booking appears when querying `GET /api/v1/appointments/me` with that user's token.
 5. Log in as an admin/staff account, open `/admin`, confirm the new booking shows up in the overview cards and bookings-over-time chart (may need `python -m scripts.backfill_analytics` run once against the production DB if this is a fresh environment).
 6. Check the Celery worker's logs for a scheduled reminder task after booking creation.
-7. Ask the chat widget an FAQ question (e.g. "what are your hours?") — after running `python -m scripts.seed_faq` against the production DB — and confirm it answers without needing an LLM call (check `GET /api/v1/admin/llm-usage` shows no new row for that turn).
+7. Ask the chat widget an FAQ question (e.g. "what are your hours?") after running `python -m scripts.seed_faq` against the production DB, and confirm it answers without needing an LLM call (check `GET /api/v1/admin/llm-usage` shows no new row for that turn).
 
 ## 7. One-time production setup scripts
 
@@ -93,4 +93,4 @@ DATABASE_URL="..." python -m app.ml.train --data-path data/synthetic_appointment
 DATABASE_URL="..." python -m scripts.backfill_analytics --days 90
 ```
 
-The no-show model and analytics rollup are designed to swap to real accumulated data over time (see the docstrings in `app/ml/train.py` and `app/tasks/analytics.py`) — these commands just bootstrap a non-empty starting state.
+The no-show model and analytics rollup are designed to swap to real accumulated data over time (see the docstrings in `app/ml/train.py` and `app/tasks/analytics.py`); these commands just bootstrap a non-empty starting state.

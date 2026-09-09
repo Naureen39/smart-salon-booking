@@ -90,6 +90,46 @@ async def test_router_retries_then_falls_back_on_malformed_json(db_session: Asyn
     assert gemini.call_count == 0
 
 
+async def test_router_retries_then_falls_back_on_blank_text_response(db_session: AsyncSession) -> None:
+    """Regression test for a real bug found in manual end-to-end testing: a
+    reasoning model (Groq's gpt-oss-20b, this project's configured default)
+    can spend its entire max_tokens budget on an internal reasoning trace and
+    return a blank visible `content`, which the router previously returned
+    as-is for non-json_mode calls, a live booking confirmation went out with
+    literally empty text despite a successfully created appointment.
+    """
+    groq = _FakeProvider(
+        "groq",
+        [
+            LLMResponse(text="   ", tokens_in=10, tokens_out=60),
+            LLMResponse(text="", tokens_in=10, tokens_out=60),
+        ],
+    )
+    gemini = _FakeProvider("gemini", [])
+    router = LLMRouter(primary=groq, fallback=gemini)
+
+    result = await router.complete(db_session, system="sys", user="hi", purpose="test")
+
+    assert result == CANNED_TEXT_FALLBACK
+    assert groq.call_count == 2
+
+
+async def test_router_recovers_after_blank_text_retry(db_session: AsyncSession) -> None:
+    groq = _FakeProvider(
+        "groq",
+        [
+            LLMResponse(text="", tokens_in=10, tokens_out=60),
+            LLMResponse(text="All set, see you then!", tokens_in=10, tokens_out=8),
+        ],
+    )
+    gemini = _FakeProvider("gemini", [])
+    router = LLMRouter(primary=groq, fallback=gemini)
+
+    result = await router.complete(db_session, system="sys", user="hi", purpose="test")
+
+    assert result == "All set, see you then!"
+
+
 async def test_router_recovers_after_json_retry(db_session: AsyncSession) -> None:
     groq = _FakeProvider(
         "groq",

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.booking.availability import compute_available_slots
-from app.booking.create import BookingConflictError, ServiceNotFoundError, create_booking
+from app.booking.create import BookingConflictError, ServiceNotFoundError, StaffNotFoundError, create_booking
 from app.core.audit import record_audit_event
 from app.core.rate_limit import limiter
 from app.db.models.appointment import Appointment
@@ -42,7 +42,10 @@ async def get_availability(
         location_id=location_id,
         staff_id=staff_id,
     )
-    return [AvailableSlotRead(staff_id=slot.staff_id, start=slot.start, end=slot.end) for slot in slots]
+    return [
+        AvailableSlotRead(staff_id=slot.staff_id, location_id=slot.location_id, start=slot.start, end=slot.end)
+        for slot in slots
+    ]
 
 
 def _is_staff_or_admin(user: User) -> bool:
@@ -92,12 +95,13 @@ async def create_appointment(
             client_id=current_user.id,
             service_id=payload.service_id,
             staff_id=payload.staff_id,
-            location_id=payload.location_id,
             scheduled_start=payload.scheduled_start,
             booking_channel=payload.booking_channel,
         )
     except ServiceNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found") from exc
+    except StaffNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff member not found") from exc
     except BookingConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="This time slot is no longer available"

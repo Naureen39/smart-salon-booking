@@ -34,3 +34,7 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Celery beat runtime state (regenerated locally when running celery beat
+# outside Docker, or via the docker-compose volume mount)
+celerybeat-schedule*

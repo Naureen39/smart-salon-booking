@@ -5,7 +5,7 @@ what makes most turns cost zero tokens.
 """
 
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from dateparser.search import search_dates
 from rapidfuzz import fuzz, process
@@ -33,6 +33,9 @@ TIME_WINDOWS: dict[str, tuple[int, int]] = {
 }
 
 SERVICE_MATCH_THRESHOLD = 70
+
+_TIME_12H_RE = re.compile(r"\b(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*([ap])\.?m\.?\b", re.IGNORECASE)
+_TIME_24H_RE = re.compile(r"\b([01]?\d|2[0-3]):([0-5]\d)\b")
 
 
 def _extract_weekday(text: str, reference_date: date) -> date | None:
@@ -70,6 +73,27 @@ def extract_time_window(text: str) -> str | None:
         return "afternoon"
     if "evening" in lowered or "night" in lowered:
         return "evening"
+    return None
+
+
+def extract_specific_time(text: str) -> time | None:
+    """Parses an explicit clock time like "3pm", "3:30 pm", or "15:00" out of
+    free text. This is deliberately separate from `extract_time_window` (which
+    only recognizes broad "morning"/"afternoon"/"evening" phrasing) — a request
+    like "book a haircut at 3pm" names an exact time, and slot presentation
+    should prioritize options closest to it rather than just the day's
+    earliest openings.
+    """
+    match = _TIME_12H_RE.search(text)
+    if match:
+        hour = int(match.group(1)) % 12
+        minute = int(match.group(2) or 0)
+        if match.group(3).lower() == "p":
+            hour += 12
+        return time(hour, minute)
+    match = _TIME_24H_RE.search(text)
+    if match:
+        return time(int(match.group(1)), int(match.group(2)))
     return None
 
 

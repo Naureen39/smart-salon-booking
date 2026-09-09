@@ -14,11 +14,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import record_audit_event
 from app.db.models.appointment import Appointment
 from app.db.models.service import Service
+from app.db.models.staff_profile import StaffProfile
 from app.ml.predict import score_appointment
 from app.tasks.reminders import schedule_reminders
 
 
 class ServiceNotFoundError(Exception):
+    pass
+
+
+class StaffNotFoundError(Exception):
     pass
 
 
@@ -32,13 +37,22 @@ async def create_booking(
     client_id: uuid.UUID,
     service_id: uuid.UUID,
     staff_id: uuid.UUID,
-    location_id: uuid.UUID | None,
     scheduled_start: datetime,
     booking_channel: str,
 ) -> Appointment:
     service = await db.get(Service, service_id)
     if service is None:
         raise ServiceNotFoundError(f"Service {service_id} not found")
+
+    staff = await db.get(StaffProfile, staff_id)
+    if staff is None:
+        raise StaffNotFoundError(f"Staff profile {staff_id} not found")
+    # Derived from the staff member's own profile rather than accepted as a
+    # caller-supplied value — a client passing a location_id that doesn't
+    # match the chosen staff member's actual location would otherwise create
+    # an appointment record inconsistent with itself, silently corrupting any
+    # per-location reporting.
+    location_id = staff.location_id
 
     scheduled_end = scheduled_start + timedelta(minutes=service.duration_minutes)
 

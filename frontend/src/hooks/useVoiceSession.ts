@@ -14,7 +14,7 @@ interface VoiceSessionCallbacks {
 }
 
 function voiceWebSocketUrl(sessionId: string, accessToken: string): string {
-  const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+  const apiBase = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8001";
   const wsBase = apiBase.replace(/^http/, "ws");
   return `${wsBase}/api/v1/voice/${sessionId}?token=${encodeURIComponent(accessToken)}`;
 }
@@ -23,7 +23,7 @@ function voiceWebSocketUrl(sessionId: string, accessToken: string): string {
  * Captures mic audio, streams it as 16-bit PCM over the voice WebSocket, and
  * surfaces transcript/reply events plus the raw reply audio for playback.
  *
- * Uses the deprecated ScriptProcessorNode rather than an AudioWorklet — the
+ * Uses the deprecated ScriptProcessorNode rather than an AudioWorklet: the
  * modern replacement needs a separate worklet module file; ScriptProcessorNode
  * is simpler to keep in one file and is still broadly supported. Swapping to
  * an AudioWorklet is the natural upgrade path if processor-thread audio

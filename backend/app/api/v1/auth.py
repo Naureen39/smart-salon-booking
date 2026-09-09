@@ -37,7 +37,14 @@ async def _issue_tokens(response: Response, user: User) -> AccessTokenResponse:
         path=REFRESH_COOKIE_PATH,
         httponly=True,
         secure=settings.environment != "development",
-        samesite="strict",
+        # "lax", not "strict": the frontend and backend are same-site but
+        # cross-origin in every real topology here (different ports in local
+        # dev, likely different subdomains in production), and Strict drops
+        # the cookie on exactly that kind of cross-origin fetch/XHR, which
+        # would silently break refresh the moment a real browser client
+        # exists. Lax still withholds the cookie on genuinely cross-site
+        # requests, which is the actual CSRF-relevant boundary.
+        samesite="lax",
     )
     return AccessTokenResponse(access_token=access_token)
 

@@ -33,6 +33,17 @@ class GroqProvider:
                 {"role": "user", "content": user},
             ],
             "max_tokens": max_tokens,
+            # The default model (gpt-oss-20b) is a reasoning model: it spends
+            # part of max_tokens on a hidden reasoning trace before any
+            # visible content, and a numeric instruction like "under 40
+            # words" was observed (in manual end-to-end testing) to push it
+            # into literally counting words in that trace, consuming the
+            # entire budget and returning blank content with
+            # finish_reason="length". "low" cut reasoning from ~130 tokens
+            # to single digits for this project's short confirmation/FAQ
+            # prompts with no loss of answer quality, harmless to send even
+            # if a future non-reasoning model on Groq ignores the field.
+            "reasoning_effort": "low",
         }
         if json_mode:
             payload["response_format"] = {"type": "json_object"}

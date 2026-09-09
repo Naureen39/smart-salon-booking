@@ -6,7 +6,12 @@ services:
       POSTGRES_PASSWORD: glowdesk
       POSTGRES_DB: glowdesk
     ports:
-      - "5432:5432"
+      # Host-side port only — every other service in this file reaches
+      # Postgres via the `postgres:5432` container hostname, so this just
+      # controls what's exposed to the machine running Docker. Mapped to a
+      # non-default host port since 5432 is the single most likely port to
+      # already be taken by some other project's Postgres container.
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -33,7 +38,11 @@ services:
       DATABASE_URL: postgresql+asyncpg://glowdesk:glowdesk@postgres:5432/glowdesk
       REDIS_URL: redis://redis:6379/0
     ports:
-      - "8000:8000"
+      # Host-side port only, same reasoning as Postgres above: 8000 is the
+      # single most likely port to already be taken by some other local
+      # FastAPI/Django project. The container still listens on 8000
+      # internally, matching the Dockerfile and this command unchanged.
+      - "8001:8000"
     volumes:
       - ./backend:/app
     depends_on:
@@ -77,6 +86,11 @@ services:
 
   frontend:
     build: ./frontend
+    environment:
+      # Must match the backend's host-published port above, not its
+      # in-container port: this is read by the browser, not by another
+      # container, so it needs whatever's reachable from the host machine.
+      VITE_API_BASE_URL: http://localhost:8001
     ports:
       - "5173:5173"
     volumes:

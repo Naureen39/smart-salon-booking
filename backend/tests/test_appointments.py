@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, hash_password
 from app.db.models.audit_log import AuditLog
+from app.db.models.location import Location
 from app.db.models.service import Service
 from app.db.models.staff_profile import StaffProfile
 from app.db.models.user import User
@@ -65,6 +66,73 @@ async def test_create_appointment_computes_fields(
     parsed_start = datetime.fromisoformat(body["scheduled_start"])
     parsed_end = datetime.fromisoformat(body["scheduled_end"])
     assert (parsed_end - parsed_start) == timedelta(minutes=service.duration_minutes)
+
+
+async def test_appointment_location_is_derived_from_staff_not_caller(
+    client: AsyncClient, service: Service, staff: StaffProfile, target_date: date, client_user: User
+) -> None:
+    """Regression test: location_id used to be whatever the caller passed in
+    the request body (or omitted), independent of the chosen staff member's
+    actual assigned location — allowing a mismatched or missing value on the
+    stored appointment. It's now always derived server-side from the staff
+    profile, so passing an unrelated location_id in the payload has no effect.
+    """
+    start = _slot_at(target_date, 11)
+    response = await client.post(
+        "/api/v1/appointments",
+        json={
+            "service_id": str(service.id),
+            "staff_id": str(staff.id),
+            "location_id": str(uuid.uuid4()),  # an unrelated id — must be ignored
+            "scheduled_start": start.isoformat(),
+        },
+        headers=_auth_header(client_user),
+    )
+    assert response.status_code == 201
+    assert response.json()["location_id"] == str(staff.location_id)
+
+
+async def test_availability_uses_staff_own_location_timezone(
+    client: AsyncClient, db_session: AsyncSession, service: Service, target_date: date
+) -> None:
+    """Regression test for a severe bug found in manual end-to-end testing:
+    compute_available_slots interpreted every staff member's working_hours as
+    UTC unless the caller pre-filtered to a single location_id — which the
+    conversation orchestrator never did — so a non-UTC salon's "9:00 AM" slot
+    was actually computed at 9:00 AM UTC, silently wrong by the location's
+    offset for every chat/voice booking (correct only by coincidence for a
+    UTC-timezoned location, which is all the other fixtures use).
+    """
+    ny_location = Location(name="NYC Branch", timezone="America/New_York")
+    db_session.add(ny_location)
+    await db_session.commit()
+    await db_session.refresh(ny_location)
+
+    weekday_keys = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+    ny_staff = StaffProfile(
+        location_id=ny_location.id,
+        title="NYC Stylist",
+        working_hours={weekday_keys[target_date.weekday()]: ["09:00-17:00"]},
+    )
+    db_session.add(ny_staff)
+    await db_session.commit()
+    await db_session.refresh(ny_staff)
+
+    response = await client.get(
+        "/api/v1/appointments/availability",
+        params={"service_id": str(service.id), "date": target_date.isoformat()},
+    )
+    assert response.status_code == 200
+    ny_slots = [slot for slot in response.json() if slot["staff_id"] == str(ny_staff.id)]
+    assert ny_slots
+
+    first_start = datetime.fromisoformat(ny_slots[0]["start"])
+    # 9:00 AM America/New_York is 13:00 or 14:00 UTC depending on DST — never
+    # 09:00 UTC, which is what the bug produced. The response keeps the
+    # location's own offset rather than normalizing to UTC, so convert before
+    # comparing.
+    assert first_start.astimezone(UTC).hour in (13, 14)
+    assert ny_slots[0]["location_id"] == str(ny_location.id)
 
 
 async def test_availability_excludes_booked_slots(
