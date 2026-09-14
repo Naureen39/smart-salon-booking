@@ -232,6 +232,8 @@ cd backend && pip install -r requirements-dev.txt && pytest
 cd frontend && npm install && npm run test
 ```
 
+**The backend suite never touches your dev database**, even though it reads the same `DATABASE_URL`. `tests/conftest.py` always runs against a `_test`-suffixed database (creating it automatically on first run) rather than the configured URL verbatim, so `pytest` can't drop, recreate, or wipe rows out of whatever seeded data (services, staff, admin accounts) your actual dev environment has. CI already points `DATABASE_URL` at a dedicated `glowdesk_test` database for the same reason; this makes local runs safe by construction too, instead of relying on every contributor's local `.env` happening to point somewhere disposable.
+
 CI (`.github/workflows/ci.yml`) runs lint, type-check, tests, and a Docker build for both services, plus dependency vulnerability scanning, on every push and pull request.
 
 ## Further Documentation

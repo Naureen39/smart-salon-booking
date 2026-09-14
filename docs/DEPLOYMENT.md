@@ -83,14 +83,17 @@ Once all pieces are live, walk through this by hand (matches the plan's Definiti
 
 ## 7. One-time production setup scripts
 
-Run these once against the production database after the first deploy:
+Run these once against the production database after the first deploy. `seed_demo_data` must run first: it's what creates the admin login step 5 above assumes already exists, along with a location, a staff profile, and a starter service menu, a freshly-migrated database otherwise has none of these, and the booking flow has nothing to ever offer.
 
 ```bash
 cd backend
+DATABASE_URL="..." python -m scripts.seed_demo_data
 DATABASE_URL="..." python -m scripts.seed_faq
 DATABASE_URL="..." python -m scripts.generate_synthetic_data --rows 20000 --out data/synthetic_appointments.csv
 DATABASE_URL="..." python -m app.ml.train --data-path data/synthetic_appointments.csv
 DATABASE_URL="..." python -m scripts.backfill_analytics --days 90
 ```
+
+**Don't leave the seeded admin password live in production.** `seed_demo_data` creates `admin@glowdesk.example` with a fixed, publicly-documented password, fine for local dev, not for a public deployment. There's no self-service password-change endpoint yet (see `docs/KNOWN_LIMITATIONS.md`), so for now that means updating `users.hashed_password` directly (`app/core/security.py::hash_password`) or deleting the seeded row and creating a real admin through the signup endpoint plus a manual role update, before exposing the deployment publicly.
 
 The no-show model and analytics rollup are designed to swap to real accumulated data over time (see the docstrings in `app/ml/train.py` and `app/tasks/analytics.py`); these commands just bootstrap a non-empty starting state.
