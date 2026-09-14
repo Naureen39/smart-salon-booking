@@ -31,7 +31,7 @@ async def test_none_algorithm_jwt_is_rejected(client: AsyncClient) -> None:
     which should make jose reject this outright.
 
     python-jose's own jwt.encode() refuses to build a "none"-alg token at all
-    (raises JWSError) — but a real attacker wouldn't go through that API
+    (raises JWSError), but a real attacker wouldn't go through that API
     either, they'd hand-craft the token bytes, so that's what this test does.
     """
     header = {"alg": "none", "typ": "JWT"}
@@ -51,7 +51,7 @@ async def test_none_algorithm_jwt_is_rejected(client: AsyncClient) -> None:
 
 
 async def test_login_rejects_sql_injection_shaped_email_at_validation(client: AsyncClient) -> None:
-    """Pydantic's EmailStr rejects this before it ever reaches a query — a
+    """Pydantic's EmailStr rejects this before it ever reaches a query, a
     second line of defense on top of the ORM's parameterized queries."""
     response = await client.post("/api/v1/auth/login", json={"email": "' OR '1'='1", "password": "anything"})
     assert response.status_code == 422
@@ -88,7 +88,7 @@ async def test_delete_my_data_anonymizes_and_deactivates_account(
     )
     assert len(audit_rows) == 1
 
-    # The account is deactivated — even a still-valid access token must stop working.
+    # The account is deactivated, even a still-valid access token must stop working.
     me_response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me_response.status_code == 401
 
@@ -97,7 +97,7 @@ async def test_concurrent_booking_requests_for_same_slot_only_one_succeeds(
     client: AsyncClient, service: Service, staff: StaffProfile, target_date: date, client_user: User
 ) -> None:
     """Load-tests the double-booking guarantee under real concurrency (docs
-    plan §14 Phase 11 item 4) — several requests for the identical slot fired
+    plan §14 Phase 11 item 4), several requests for the identical slot fired
     at once, relying on the Phase 2 DB-level exclusion constraint (not an
     app-level pre-check, which can't close this race) to let exactly one win.
     """

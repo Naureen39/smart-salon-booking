@@ -1,5 +1,5 @@
 """Live no-show risk scoring, invoked synchronously at booking creation (docs
-plan §10.3 — model inference itself is fast, <10ms; the DB lookups for
+plan §10.3, model inference itself is fast, <10ms; the DB lookups for
 client/staff history dominate the actual latency here).
 """
 
@@ -18,7 +18,7 @@ from app.ml.features import ALL_FEATURES, build_feature_row
 from app.ml.train import GBM_MODEL_PATH
 
 DEFAULT_RISK_SCORE = 0.12
-"""The synthetic dataset's base rate — used when no trained model artifact
+"""The synthetic dataset's base rate, used when no trained model artifact
 exists yet (a fresh dev/test environment before the first `python -m
 app.ml.train` run), so booking creation never hard-fails on missing ML state.
 """

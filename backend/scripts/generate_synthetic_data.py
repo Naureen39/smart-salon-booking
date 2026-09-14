@@ -4,8 +4,8 @@ appointment, already containing every column app/ml/features.py expects plus
 the no_show label, so app/ml/train.py can load it directly with pandas.
 
 Client/staff history stats (client_past_no_show_rate, client_total_visits,
-client_tenure_days, staff_no_show_rate_historical) are computed causally —
-only from appointments strictly earlier than the current row — so the dataset
+client_tenure_days, staff_no_show_rate_historical) are computed causally:
+only from appointments strictly earlier than the current row, so the dataset
 has no label leakage (a model scoring ~0.99 AUC on synthetic data usually
 means the generator leaked the label into a feature).
 
@@ -76,7 +76,7 @@ class StaffHistory:
 
 def _sample_lead_time_hours(rng: random.Random) -> float:
     # Lognormal: mostly "a few days out," with a long tail of both last-minute
-    # and far-out bookings — enough spread to exercise both of §10.1's lead-time
+    # and far-out bookings, enough spread to exercise both of §10.1's lead-time
     # patterns (short AND long lead time each raise risk, for different reasons).
     hours = rng.lognormvariate(mu=3.2, sigma=1.1)
     return max(0.5, min(hours, 90 * 24))
@@ -94,8 +94,8 @@ def _no_show_probability(
     price_cents: int,
     rng: random.Random,
 ) -> float:
-    # Risk factors combine on the log-odds (logit) scale — the standard way to
-    # stack independent multiplicative effects — rather than adding raw
+    # Risk factors combine on the log-odds (logit) scale, the standard way to
+    # stack independent multiplicative effects, rather than adding raw
     # percentage points, which saturates fast and compresses everything into a
     # narrow, weakly-separable probability band.
     logit = BASE_LOGIT
@@ -181,7 +181,7 @@ def generate(rows: int, seed: int = 42) -> pd.DataFrame:
             }
         )
 
-        # Update running histories AFTER emitting the row — causal, no leakage.
+        # Update running histories AFTER emitting the row, causal, no leakage.
         if history.first_seen is None:
             history.first_seen = scheduled_start
         history.total_visits += 1

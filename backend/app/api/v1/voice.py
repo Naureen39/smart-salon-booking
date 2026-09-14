@@ -6,7 +6,7 @@ barge-in (speech arriving while a reply is still being sent cancels it).
 
 Auth note: browsers can't easily set custom headers on a WebSocket handshake,
 so the (short-lived, 15-minute) access token is passed as a query parameter
-instead of an Authorization header — a common, documented FastAPI pattern,
+instead of an Authorization header, a common, documented FastAPI pattern,
 accepted here given the token's short lifetime.
 """
 
@@ -38,7 +38,7 @@ SILENCE_THRESHOLD_MS = 800
 
 class UtteranceBuffer:
     """Accumulates PCM frames until enough trailing silence follows detected
-    speech — independently testable without any WebSocket involved."""
+    speech, independently testable without any WebSocket involved."""
 
     def __init__(self, silence_threshold_ms: int = SILENCE_THRESHOLD_MS) -> None:
         self.buffer = bytearray()
@@ -77,7 +77,7 @@ async def _authenticate(token: str) -> User | None:
 
     # A fresh engine, not the app's module-level one: this runs once per WS
     # connection rather than per-request, so it doesn't share the request/
-    # response DI cycle the rest of the app uses — creating its own engine
+    # response DI cycle the rest of the app uses, creating its own engine
     # keeps it correct under any event-loop lifecycle (tests included).
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     try:
@@ -98,7 +98,7 @@ async def _send_reply_audio(websocket: WebSocket, tts_engine: TTSEngine, text: s
 
 async def _is_over_connection_limit(client_ip: str | None) -> bool:
     """Manual Redis-backed rate limit on new voice WS connections per minute
-    (docs plan §7.5/§8) — slowapi's decorator targets regular HTTP request/
+    (docs plan §7.5/§8), slowapi's decorator targets regular HTTP request/
     response routes, not persistent WebSocket connections, so this protects
     the STT quota the same way without depending on it for a WS handler."""
     if not client_ip:

@@ -13,7 +13,7 @@ def test_pcm16_to_wav_bytes_produces_valid_wav_header() -> None:
 
 def test_transcribe_wav_bytes_joins_segments(monkeypatch: pytest.MonkeyPatch) -> None:
     # The real faster-whisper model is a large download and slow to run in a
-    # test suite — this exercises the actual joining/formatting logic against
+    # test suite, this exercises the actual joining/formatting logic against
     # a fake model instead, while `_get_model()` itself still loads the real
     # one for actual dev/prod use.
     class FakeSegment:

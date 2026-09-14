@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class SignupRequest(BaseModel):
-    # Deliberately has no `role` field — public signup always creates a client.
+    # Deliberately has no `role` field, public signup always creates a client.
     # Any extra "role" sent by a caller is ignored (pydantic's default extra="ignore"),
     # which is what defeats a role-escalation attempt at this endpoint.
     model_config = ConfigDict(extra="ignore")

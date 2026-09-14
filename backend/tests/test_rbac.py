@@ -35,7 +35,7 @@ async def test_role_claim_in_stale_token_is_reverified_against_db(
     client: AsyncClient, admin_user: User, db_session: AsyncSession
 ) -> None:
     """A token minted while the user was an admin must stop granting admin access
-    once the DB row's role changes — require_role re-checks the DB, not the JWT claim."""
+    once the DB row's role changes, require_role re-checks the DB, not the JWT claim."""
     token = create_access_token(admin_user.id, "admin")
 
     admin_user.role = "client"

@@ -9,7 +9,7 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 class GroqProvider:
-    """Primary provider (docs plan §9.4) — fastest, generous free daily budget.
+    """Primary provider (docs plan §9.4), fastest, generous free daily budget.
     Uses Groq's OpenAI-compatible chat completions endpoint.
     """
 

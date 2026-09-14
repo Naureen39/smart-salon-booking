@@ -19,7 +19,7 @@ async def test_signup_creates_client_and_ignores_role_escalation(client: AsyncCl
             "email": "client@example.com",
             "password": "password123",
             "full_name": "Client User",
-            "role": "admin",  # attempted role escalation — must be ignored
+            "role": "admin",  # attempted role escalation, must be ignored
         },
     )
 

@@ -30,7 +30,7 @@ TOP_RISK_FRACTION = 0.20  # the "top 20% riskiest flagged" operating point from 
 
 
 def _time_based_split(df: pd.DataFrame, train_fraction: float = 0.8) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Train on earlier appointments, test on later ones — simulates real
+    """Train on earlier appointments, test on later ones, simulates real
     deployment (§10.3) far better than a random shuffle would."""
     ordered = df.sort_values("scheduled_start").reset_index(drop=True)
     split_index = int(len(ordered) * train_fraction)
@@ -65,11 +65,11 @@ def train_and_persist_models(
 ) -> dict:
     """Trains both models on `data_path`, persists them, and returns a metrics
     report. Raises ValueError if the gradient-boosting model's AUC falls below
-    `min_auc` (pass None to skip the check — used by fast/small-sample tests).
+    `min_auc` (pass None to skip the check, used by fast/small-sample tests).
 
     `data_path` is a CSV today, bootstrapped from scripts/generate_synthetic_data.py.
     Swapping to real accumulated booking history later means changing what this
-    loads (e.g. a query over the `appointments` table) — the feature schema in
+    loads (e.g. a query over the `appointments` table), the feature schema in
     app/ml/features.py is the shared contract, not this loader.
     """
     df = pd.read_csv(data_path, parse_dates=["scheduled_start"])

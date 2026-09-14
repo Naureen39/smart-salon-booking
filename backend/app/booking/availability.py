@@ -66,8 +66,8 @@ async def compute_available_slots(
     # Resolved per staff member, not once for the whole call: a multi-location
     # business has staff whose working_hours are in *their own* location's
     # local time, not a single timezone shared by everyone. Callers that don't
-    # (or can't) pre-filter to one location — the conversation orchestrator
-    # never has — used to silently get every staff member's hours interpreted
+    # (or can't) pre-filter to one location, the conversation orchestrator
+    # never has, used to silently get every staff member's hours interpreted
     # as UTC, which is only correct by coincidence when a location's timezone
     # actually is UTC.
     referenced_location_ids = {staff.location_id for staff in staff_profiles if staff.location_id is not None}

@@ -1,4 +1,4 @@
-"""Redis-backed sliding-window rate limiting (docs plan §7.5/§8) — protects
+"""Redis-backed sliding-window rate limiting (docs plan §7.5/§8), protects
 auth endpoints from brute force and chat/voice endpoints from burning
 through the free LLM/STT quotas.
 """

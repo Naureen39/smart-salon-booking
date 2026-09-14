@@ -9,8 +9,8 @@ from typing import Protocol
 
 class ProviderError(Exception):
     """Raised by a provider on a failed call. `retryable` distinguishes
-    transient issues (429 rate limit, 5xx) — which the router retries once
-    then fails over on — from non-retryable ones (e.g. a 400 bad request,
+    transient issues (429 rate limit, 5xx), which the router retries once
+    then fails over on, from non-retryable ones (e.g. a 400 bad request,
     which retrying or switching providers won't fix)."""
 
     def __init__(self, message: str, *, retryable: bool = True) -> None:

@@ -1,6 +1,6 @@
 """Shared appointment-creation logic, used by both the REST endpoint
 (app/api/v1/appointments.py) and the conversation orchestrator (app/ai/
-orchestrator.py) — risk scoring, audit logging, and reminder scheduling must
+orchestrator.py), risk scoring, audit logging, and reminder scheduling must
 happen identically regardless of which channel booked the appointment.
 """
 
@@ -48,7 +48,7 @@ async def create_booking(
     if staff is None:
         raise StaffNotFoundError(f"Staff profile {staff_id} not found")
     # Derived from the staff member's own profile rather than accepted as a
-    # caller-supplied value — a client passing a location_id that doesn't
+    # caller-supplied value, a client passing a location_id that doesn't
     # match the chosen staff member's actual location would otherwise create
     # an appointment record inconsistent with itself, silently corrupting any
     # per-location reporting.

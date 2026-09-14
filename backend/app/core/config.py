@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # Free-tier daily request ceilings the router proactively switches away from
     # before hitting a hard 429 (docs plan §9.4). Groq's published free tier is
     # 1,000 RPD; Gemini's isn't stated as precisely in the plan, so 1500 is a
-    # conservative documented default — adjust here if providers change limits.
+    # conservative documented default, adjust here if providers change limits.
     groq_daily_request_limit: int = 1000
     gemini_daily_request_limit: int = 1500
 
@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     whisper_compute_type: str = "int8"
     tts_engine: str = "pyttsx3"
     # Default is the zero-setup offline fallback (see app/ai/tts.py) rather than
-    # the plan's named "openvoice_v2" — OpenVoice V2 has no clean pip wheel and
+    # the plan's named "openvoice_v2", OpenVoice V2 has no clean pip wheel and
     # needs a manually-downloaded checkpoint, so it can't be the default until
     # that's provisioned. Set TTS_ENGINE=openvoice_v2 once it is.
     tts_reference_voice_path: str = "/app/assets/brand_voice_sample.wav"
@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # Empirically calibrated against BAAI/bge-small-en-v1.5's real cosine-similarity
     # distribution: genuine paraphrase matches scored 0.67-0.81, unrelated queries
     # scored 0.42-0.56 (see the Phase 5 verification notes). 0.65 sits cleanly
-    # between the two clusters — the plan's suggested 0.82 would reject nearly
+    # between the two clusters, the plan's suggested 0.82 would reject nearly
     # every legitimate FAQ match for this model.
     rag_similarity_threshold: float = 0.65
 

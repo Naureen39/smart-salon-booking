@@ -158,7 +158,7 @@ async def test_overview_avg_lead_time_excludes_future_bookings(
     avg_lead_time_hours had no upper bound on scheduled_start, so a booking
     made today for two weeks from now (which the daily_booking_stats rollup,
     scoped to already-elapsed days, correctly excludes from total_bookings)
-    was still pulled into the average lead time — producing a contradictory
+    was still pulled into the average lead time, producing a contradictory
     overview card ("0 bookings" next to a large average lead time).
     """
     past_date = (datetime.now(UTC) - timedelta(days=1)).date()
@@ -262,7 +262,7 @@ async def test_service_popularity_excludes_future_bookings(
 ) -> None:
     """Regression test for a gap found in manual end-to-end testing: this
     query had no upper bound on scheduled_start, so a booking made for two
-    weeks out counted toward every `days` window equally — the period
+    weeks out counted toward every `days` window equally, the period
     selector barely changed the result once any future bookings existed.
     """
     db_session.add_all(
@@ -305,7 +305,7 @@ async def test_staff_utilization_computes_booked_and_available_hours(
     await db_session.commit()
 
     # days=8 guarantees the window includes a day 7 days back from today, which
-    # shares today's weekday — the only weekday the `staff` fixture configures
+    # shares today's weekday, the only weekday the `staff` fixture configures
     # working_hours for (see conftest's `staff`/`target_date` fixtures).
     response = await client.get("/api/v1/admin/staff-utilization?days=8", headers=_auth_header(admin_user))
     assert response.status_code == 200
@@ -325,7 +325,7 @@ async def test_staff_utilization_excludes_future_bookings(
 ) -> None:
     """Regression test: booked_hours had no upper bound on scheduled_start, so
     a far-future booking inflated it while available_hours (which only ever
-    counts days strictly before today) stayed the same — a staff member could
+    counts days strictly before today) stayed the same, a staff member could
     show over 100% utilization from bookings that haven't happened yet.
     """
     db_session.add_all(

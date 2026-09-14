@@ -1,5 +1,5 @@
 """Feature schema shared by training (app/ml/train.py) and live scoring
-(app/ml/predict.py) — per docs plan §10.2, both paths must build the exact
+(app/ml/predict.py), per docs plan §10.2, both paths must build the exact
 same columns the exact same way, so a persisted model always sees what it
 was trained on.
 """
@@ -49,7 +49,7 @@ def build_feature_row(
     booking_channel: str | None,
     staff_no_show_rate_historical: float,
 ) -> dict:
-    """Builds one row with exactly the ALL_FEATURES columns — used for a single
+    """Builds one row with exactly the ALL_FEATURES columns, used for a single
     live-scoring prediction. Training rows come pre-built with these same
     column names directly from scripts/generate_synthetic_data.py."""
     return {

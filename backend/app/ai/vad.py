@@ -1,4 +1,4 @@
-"""Voice-activity detection for barge-in handling (docs plan §9.5) — lets the
+"""Voice-activity detection for barge-in handling (docs plan §9.5), lets the
 voice pipeline detect when the caller starts speaking again during playback,
 so playback can stop.
 
@@ -8,7 +8,7 @@ platform combination and needs MSVC build tools to compile from source,
 which aren't installed here; Silero VAD's streaming API (VADIterator) is
 event-based rather than a simple per-frame yes/no, which doesn't fit this
 module's interface without extra adaptation. This is a small, dependency-free
-energy-based (RMS) detector instead — a well-understood, legitimate VAD
+energy-based (RMS) detector instead, a well-understood, legitimate VAD
 technique, fully deterministic and unit-testable. Swapping in webrtcvad or
 Silero later means reimplementing this class's two methods; nothing else in
 the voice pipeline would need to change.
@@ -23,7 +23,7 @@ BYTES_PER_SAMPLE = 2  # 16-bit PCM
 
 DEFAULT_ENERGY_THRESHOLD = 500.0
 """RMS amplitude (of a 16-bit PCM signal, max 32767) above which a frame is
-considered speech. Calibrated for a normal-volume mic in a quiet room —
+considered speech. Calibrated for a normal-volume mic in a quiet room;
 adjust per deployment if needed."""
 
 
@@ -57,7 +57,7 @@ class VoiceActivityDetector:
 
     def any_speech(self, audio: bytes) -> bool:
         """Splits `audio` into VAD-sized frames and returns True if any frame
-        contains speech — used to detect the caller barging in during
+        contains speech, used to detect the caller barging in during
         playback."""
         step = self.frame_bytes
         return any(self.is_speech(audio[i : i + step]) for i in range(0, len(audio) - step + 1, step))

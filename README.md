@@ -208,10 +208,11 @@ infra/            production hardening scripts (restricted DB role, backups)
    alembic upgrade head
    ```
 
-4. **Seed starter data** (optional, but recommended so the app isn't empty on first run):
+4. **Seed starter data.** `seed_demo_data` is not optional: a fresh database has no location, no staff, and no services, so there's nothing for the booking flow to ever offer, the chatbot will report every service as not found until this has run. The rest are optional but recommended so the app isn't otherwise empty on first run:
 
    ```bash
    cd backend
+   python -m scripts.seed_demo_data
    python -m scripts.seed_faq
    python -m scripts.generate_synthetic_data --rows 20000 --out data/synthetic_appointments.csv
    python -m app.ml.train --data-path data/synthetic_appointments.csv

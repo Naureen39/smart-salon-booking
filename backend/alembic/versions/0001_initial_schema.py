@@ -1,4 +1,4 @@
-"""initial schema — users, locations, staff_profiles, services, appointments,
+"""initial schema, users, locations, staff_profiles, services, appointments,
 conversation_sessions, faq_documents (pgvector), audit_log
 
 Mirrors the schema defined in docs plan §6 verbatim so the two stay in sync.

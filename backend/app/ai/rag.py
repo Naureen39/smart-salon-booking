@@ -4,7 +4,7 @@ similarity search against pre-embedded canonical FAQ questions, and return the
 stored answer directly when the top match is confident enough.
 
 Below that confidence threshold, the plan calls for grounding a generated
-answer in the retrieved snippets via the LLM router — which doesn't exist yet
+answer in the retrieved snippets via the LLM router, which doesn't exist yet
 (that's Phase 6/7). So this module accepts an optional `llm_fallback`
 callable the orchestrator can supply later; without one, it returns a plain
 "I'll check with staff" response, which keeps this fully functional and
@@ -24,7 +24,7 @@ from app.db.models.faq_document import FaqDocument
 settings = get_settings()
 
 TOP_K = 3
-FALLBACK_MESSAGE = "I'm not fully certain about that — let me check with our staff and get back to you."
+FALLBACK_MESSAGE = "I'm not fully certain about that, let me check with our staff and get back to you."
 
 
 @dataclass(frozen=True)

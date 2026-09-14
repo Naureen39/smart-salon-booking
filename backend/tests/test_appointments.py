@@ -73,7 +73,7 @@ async def test_appointment_location_is_derived_from_staff_not_caller(
 ) -> None:
     """Regression test: location_id used to be whatever the caller passed in
     the request body (or omitted), independent of the chosen staff member's
-    actual assigned location — allowing a mismatched or missing value on the
+    actual assigned location, allowing a mismatched or missing value on the
     stored appointment. It's now always derived server-side from the staff
     profile, so passing an unrelated location_id in the payload has no effect.
     """
@@ -83,7 +83,7 @@ async def test_appointment_location_is_derived_from_staff_not_caller(
         json={
             "service_id": str(service.id),
             "staff_id": str(staff.id),
-            "location_id": str(uuid.uuid4()),  # an unrelated id — must be ignored
+            "location_id": str(uuid.uuid4()),  # an unrelated id, must be ignored
             "scheduled_start": start.isoformat(),
         },
         headers=_auth_header(client_user),
@@ -97,8 +97,8 @@ async def test_availability_uses_staff_own_location_timezone(
 ) -> None:
     """Regression test for a severe bug found in manual end-to-end testing:
     compute_available_slots interpreted every staff member's working_hours as
-    UTC unless the caller pre-filtered to a single location_id — which the
-    conversation orchestrator never did — so a non-UTC salon's "9:00 AM" slot
+    UTC unless the caller pre-filtered to a single location_id, which the
+    conversation orchestrator never did, so a non-UTC salon's "9:00 AM" slot
     was actually computed at 9:00 AM UTC, silently wrong by the location's
     offset for every chat/voice booking (correct only by coincidence for a
     UTC-timezoned location, which is all the other fixtures use).
@@ -127,7 +127,7 @@ async def test_availability_uses_staff_own_location_timezone(
     assert ny_slots
 
     first_start = datetime.fromisoformat(ny_slots[0]["start"])
-    # 9:00 AM America/New_York is 13:00 or 14:00 UTC depending on DST — never
+    # 9:00 AM America/New_York is 13:00 or 14:00 UTC depending on DST, never
     # 09:00 UTC, which is what the bug produced. The response keeps the
     # location's own offset rather than normalizing to UTC, so convert before
     # comparing.

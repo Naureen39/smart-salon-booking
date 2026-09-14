@@ -62,7 +62,7 @@ def test_schedule_reminders_high_risk_schedules_three_tasks_with_correct_etas() 
 
 
 def test_schedule_reminders_skips_offsets_already_in_the_past() -> None:
-    # Only 10 hours until the appointment — the 72h and 24h high-risk offsets
+    # Only 10 hours until the appointment, the 72h and 24h high-risk offsets
     # would fall in the past, so only the 2h-before reminder should be queued.
     appointment = _make_appointment(risk_score=0.9, hours_until_start=10)
     with patch("app.tasks.reminders.send_appointment_reminder") as mock_task:

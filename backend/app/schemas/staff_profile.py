@@ -13,7 +13,7 @@ class StaffProfileBase(BaseModel):
     title: str | None = None
     bio: str | None = None
     working_hours: dict | None = None
-    """e.g. {"mon": ["09:00-17:00"], ...} — each day maps to a list of
+    """e.g. {"mon": ["09:00-17:00"], ...}, each day maps to a list of
     "HH:MM-HH:MM" windows. Validated here (rather than left as a free-form
     dict) because a malformed value would otherwise pass creation silently
     and only surface as a 500 later, at booking time, when

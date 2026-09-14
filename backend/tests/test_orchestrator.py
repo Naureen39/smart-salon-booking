@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -87,7 +87,7 @@ async def test_specific_time_request_prioritizes_closest_slots_over_earliest(
     target_date: date,
 ) -> None:
     """A request naming an exact clock time (e.g. "4pm") should surface slots
-    near that time first, not just the day's earliest openings — regression
+    near that time first, not just the day's earliest openings, regression
     test for a gap found in manual end-to-end testing: extract_time_window
     only recognizes "morning"/"afternoon"/"evening", so a literal time like
     "4pm" was previously silently ignored and every request got 9 AM options.
@@ -116,7 +116,7 @@ async def test_multi_location_booking_names_location_and_persists_it(
     target_date: date,
 ) -> None:
     """Regression test for a disclosed gap now fixed: the conversational flow
-    used to ignore location entirely — it never told the client which
+    used to ignore location entirely, it never told the client which
     location a slot was at, and every chat-booked appointment was persisted
     with location_id=None regardless of the staff member's actual location.
     With a second location/staff sharing the same early availability, the
@@ -244,6 +244,51 @@ async def test_ambiguous_input_triggers_exactly_one_llm_call(
     assert result.state["intent"] == "book_appointment"
 
 
+async def test_unknown_intent_does_not_permanently_stick_the_session(
+    db_session: AsyncSession, client_user: User, service: Service, staff: StaffProfile, target_date: date
+) -> None:
+    """Regression test for a real bug found in manual end-to-end testing: a
+    bare greeting on turn one legitimately classifies as intent "unknown"
+    (EXTRACTION_SYSTEM_PROMPT explicitly allows this) and that gets
+    persisted to session.state. The bug: re-classification was gated on
+    `intent is None`, treating a persisted "unknown" as a *final* answer, so
+    a later, completely unambiguous "book a haircut" in the very same
+    session hit the generic fallback forever instead of ever starting the
+    booking flow.
+    """
+    session = ConversationSession(client_id=client_user.id, channel="chat", state={})
+    db_session.add(session)
+    await db_session.commit()
+    await db_session.refresh(session)
+
+    greeting_router = LLMRouter(
+        primary=_FakeProvider(
+            "groq",
+            [
+                LLMResponse(
+                    text='{"intent": "unknown", "slot_updates": {}, '
+                    '"reply_text": "Hello! How can I help you today?"}',
+                    tokens_in=50,
+                    tokens_out=15,
+                )
+            ],
+        ),
+        fallback=_FakeProvider("gemini", []),
+    )
+    first = await process_turn(
+        db_session, session=session, message="hi", client_id=client_user.id, router=greeting_router
+    )
+    assert first.state["intent"] == "unknown"
+
+    message = f"I need to book a {service.name} on {target_date.isoformat()}"
+    second = await process_turn(
+        db_session, session=session, message=message, client_id=client_user.id, router=_confirmation_router()
+    )
+
+    assert second.reply_text != "I'm not sure how to help with that yet. Could you tell me more?"
+    assert second.state["intent"] == "book_appointment"
+
+
 async def test_faq_question_answered_without_llm_when_confident(
     db_session: AsyncSession, client_user: User
 ) -> None:
@@ -270,7 +315,7 @@ async def test_faq_question_answered_without_llm_when_confident(
 
     assert result.llm_calls == 0
     assert result.reply_text == doc.answer
-    # FAQ is a stateless aside — session resets so the next message starts fresh.
+    # FAQ is a stateless aside, session resets so the next message starts fresh.
     assert result.state["intent"] is None
 
 
@@ -292,6 +337,71 @@ async def test_missing_slot_prompts_without_llm(
 
     assert result.llm_calls == 0
     assert "date" in result.reply_text.lower()
+
+
+async def test_no_availability_clears_date_so_a_new_date_can_be_given(
+    db_session: AsyncSession,
+    client_user: User,
+    service: Service,
+    staff: StaffProfile,
+    target_date: date,
+) -> None:
+    """Regression test for a real bug found in manual end-to-end testing: the
+    `staff` fixture only has working hours on `target_date`'s weekday, so
+    asking for the very next day has zero availability. The old code left the
+    unavailable date sitting in `slots` after replying "would another day
+    work?", so a reply that didn't itself parse as a date (a plain "yes")
+    fell through to the exact same availability lookup for the exact same
+    day, repeating the identical "nothing available" message forever instead
+    of ever accepting a new date.
+    """
+    session = ConversationSession(client_id=client_user.id, channel="chat", state={})
+    db_session.add(session)
+    await db_session.commit()
+    await db_session.refresh(session)
+
+    unavailable_date = target_date + timedelta(days=1)
+
+    # "yes" alone names no service/date/time-window, so it isn't resolvable by
+    # the rule-based extractors and needs the one genuine LLM fallback call
+    # (matching the pattern in test_ambiguous_input_triggers_exactly_one_llm_call).
+    router = LLMRouter(
+        primary=_FakeProvider(
+            "groq",
+            [
+                LLMResponse(
+                    text='{"intent": "book_appointment", "slot_updates": {}, '
+                    '"reply_text": "Sure, what date would work instead?"}',
+                    tokens_in=50,
+                    tokens_out=15,
+                )
+            ],
+        ),
+        fallback=_FakeProvider("gemini", []),
+    )
+
+    first = await process_turn(
+        db_session,
+        session=session,
+        message=f"I'd like to book a {service.name} on {unavailable_date.isoformat()}",
+        client_id=client_user.id,
+        router=router,
+    )
+    assert "nothing available" in first.reply_text.lower()
+    assert "date" not in first.state["slots"]
+
+    second = await process_turn(db_session, session=session, message="yes", client_id=client_user.id, router=router)
+    assert "nothing available" not in second.reply_text.lower()
+    assert "date" in second.reply_text.lower()
+
+    third = await process_turn(
+        db_session,
+        session=session,
+        message=target_date.isoformat(),
+        client_id=client_user.id,
+        router=_confirmation_router(),
+    )
+    assert third.quick_replies
 
 
 async def test_conversation_endpoints_end_to_end(

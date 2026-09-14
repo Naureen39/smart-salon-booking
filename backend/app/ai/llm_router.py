@@ -4,8 +4,8 @@ switching once a provider's daily request budget is spent, one retry on
 malformed JSON-mode output before a canned fallback, and per-call usage
 logging to llm_usage for cost/quota observability.
 
-json_mode validation here is deliberately generic (syntactically valid JSON)
-— this router is provider- and purpose-agnostic. A caller that needs a
+json_mode validation here is deliberately generic (syntactically valid JSON):
+this router is provider- and purpose-agnostic. A caller that needs a
 specific shape (e.g. the Phase 7 conversation orchestrator's
 {"slot_updates": ..., "reply_text": ...}) validates that on top of what this
 returns, with its own Pydantic schema.
@@ -87,7 +87,7 @@ class LLMRouter:
         redis_client = get_redis_client()
         key = self._daily_count_key(provider_name)
         await redis_client.incr(key)
-        await redis_client.expire(key, 60 * 60 * 26)  # a little over a day — self-cleaning
+        await redis_client.expire(key, 60 * 60 * 26)  # a little over a day, self-cleaning
 
     async def _log_usage(
         self,
@@ -127,8 +127,8 @@ class LLMRouter:
         max_tokens: int,
         json_mode: bool,
     ) -> LLMResponse | None:
-        """Tries `provider` up to twice — one retry on a retryable failure,
-        with a brief backoff — logging every attempt. Returns None if the
+        """Tries `provider` up to twice, one retry on a retryable failure,
+        with a brief backoff, logging every attempt. Returns None if the
         provider never succeeds."""
         for attempt in range(2):
             start = time.monotonic()

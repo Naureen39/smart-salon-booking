@@ -1,4 +1,4 @@
-"""Speech-to-text via faster-whisper (docs plan §9.5) — a CTranslate2 port of
+"""Speech-to-text via faster-whisper (docs plan §9.5), a CTranslate2 port of
 Whisper, int8-quantized for fast CPU inference at no per-call cost.
 """
 

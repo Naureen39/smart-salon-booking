@@ -1,4 +1,4 @@
-"""Nightly rollup job producing daily_booking_stats (docs plan §12) — powers
+"""Nightly rollup job producing daily_booking_stats (docs plan §12), powers
 the admin dashboard's overview cards and trend charts from a small,
 pre-aggregated table instead of scanning every appointment on each page load.
 """
@@ -78,7 +78,7 @@ async def rollup_day(db: AsyncSession, target_date: date) -> DailyBookingStats:
 
 
 async def _rollup_day_fresh_engine(target_date: date) -> None:
-    # A fresh engine per invocation — see app/tasks/reminders.py for why
+    # A fresh engine per invocation, see app/tasks/reminders.py for why
     # Celery's sync-task-wrapping-asyncio.run model needs this rather than the
     # app's module-level engine.
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)

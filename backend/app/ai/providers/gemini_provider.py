@@ -9,7 +9,7 @@ GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
 class GeminiProvider:
-    """Fallback provider (docs plan §9.4) — a second free-tier budget to burst
+    """Fallback provider (docs plan §9.4), a second free-tier budget to burst
     into once Groq's daily/rate cap is hit.
     """
 

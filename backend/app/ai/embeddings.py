@@ -1,11 +1,11 @@
 """Sentence embeddings for FAQ retrieval (docs plan §9.2), via
 BAAI/bge-small-en-v1.5 (384-dim) through sentence-transformers. The model is
-loaded lazily and cached at module scope — it's tens of MB and slow to load,
+loaded lazily and cached at module scope, it's tens of MB and slow to load,
 so every caller (the seeding script and live query embedding) shares one
 instance instead of reloading it per call.
 
 BGE's own model card recommends prefixing *queries* (not passages) with an
-instruction string for asymmetric retrieval — matching a short question
+instruction string for asymmetric retrieval, matching a short question
 against a bank of canonical FAQ questions is exactly that asymmetric case.
 """
 

@@ -1,4 +1,4 @@
-"""Backfills daily_booking_stats from existing appointment history — useful in
+"""Backfills daily_booking_stats from existing appointment history, useful in
 a fresh dev/demo environment where the nightly Celery Beat rollup (docs plan
 §12) hasn't had a chance to run yet.
 

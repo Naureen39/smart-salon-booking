@@ -20,7 +20,7 @@ async def store_refresh_token(jti: str, token: str) -> None:
 
 
 async def is_refresh_token_valid(jti: str, token: str) -> bool:
-    """Checks the token against its Redis allowlist entry — absent or mismatched means
+    """Checks the token against its Redis allowlist entry, absent or mismatched means
     already used (rotated away), revoked (logout), or expired."""
     stored_hash = await get_redis_client().get(_key(jti))
     if stored_hash is None:

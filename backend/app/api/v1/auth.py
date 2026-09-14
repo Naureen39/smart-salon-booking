@@ -176,8 +176,8 @@ async def delete_my_data(
     """GDPR-style self-service erasure (docs plan §8). Anonymizes rather than
     hard-deletes: appointments and audit_log rows reference this user and
     have their own legitimate retention needs (booking history, security
-    audit trail), so scrubbing PII from the user row — email, name, phone,
-    password — while deactivating the account satisfies "right to erasure"
+    audit trail), so scrubbing PII from the user row, email, name, phone,
+    password, while deactivating the account satisfies "right to erasure"
     without breaking that referential history. This mirrors how most real
     GDPR implementations handle records with retention obligations.
     """

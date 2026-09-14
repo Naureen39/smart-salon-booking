@@ -9,7 +9,7 @@ _redis_client: Redis | None = None
 
 def get_redis_client() -> Redis:
     """Lazily creates the Redis client on first use, within whichever event loop
-    is running at that point — safer than a module-level singleton created at
+    is running at that point, safer than a module-level singleton created at
     import time, since asyncio connections are bound to the loop that created
     them (matters for tests, which run each test on its own loop)."""
     global _redis_client

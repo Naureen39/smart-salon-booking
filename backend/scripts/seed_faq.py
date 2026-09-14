@@ -25,7 +25,7 @@ FAQ_SEED_DATA = [
     ),
     (
         "Is parking available?",
-        "Yes — free customer parking is available directly behind the salon, with additional "
+        "Yes, free customer parking is available directly behind the salon, with additional "
         "street parking on the block.",
     ),
     (
@@ -49,7 +49,7 @@ FAQ_SEED_DATA = [
     ),
     (
         "What if I'm running late?",
-        "Please call us as soon as you know — we'll do our best to accommodate you, but arriving "
+        "Please call us as soon as you know; we'll do our best to accommodate you, but arriving "
         "more than 15 minutes late may require rescheduling to protect other clients' appointment times.",
     ),
     (

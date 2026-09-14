@@ -7,7 +7,7 @@ from app.db.base import Base
 
 
 class LlmUsage(Base):
-    """Per-call observability for the LLM router (docs plan §9.4) — provider,
+    """Per-call observability for the LLM router (docs plan §9.4), provider,
     model, purpose, token counts, latency, and outcome. Surfaced on the admin
     dashboard's LLM usage panel (§12) so quota headroom is visible at a glance.
     """

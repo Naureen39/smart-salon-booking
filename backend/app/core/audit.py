@@ -14,7 +14,7 @@ async def record_audit_event(
     entity_id: uuid.UUID | None,
     metadata: dict | None = None,
 ) -> None:
-    """Adds an audit_log row to the current session — the caller commits alongside
+    """Adds an audit_log row to the current session, the caller commits alongside
     whatever mutation this event describes, so the two are never out of sync."""
     db.add(
         AuditLog(

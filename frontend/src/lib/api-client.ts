@@ -34,16 +34,39 @@ async function extractErrorMessage(response: Response): Promise<string> {
   return `Request failed (${response.status})`;
 }
 
+// Without this, a request that never gets a response (a hung/misbehaving
+// server, a proxy that accepts the connection but never replies) leaves
+// `fetch` pending indefinitely, since browsers apply no default timeout of
+// their own. A page whose loading state is only cleared in `.then`/`.catch`
+// then shows its "Loading…" state forever with no error and no way for the
+// user to tell something's wrong, exactly the failure mode found in manual
+// end-to-end testing against a backend that had silently stopped responding.
+const REQUEST_TIMEOUT_MS = 15_000;
+
 export async function apiFetch<T>(path: string, init?: RequestInit, accessToken?: string | null): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers,
-    ...init,
-  });
+  const timeoutController = new AbortController();
+  const timeoutId = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      headers,
+      signal: timeoutController.signal,
+      ...init,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new ApiError("The server took too long to respond. Please try again.", 0);
+    }
+    throw new ApiError("Couldn't reach the server. Check your connection and try again.", 0);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     throw new ApiError(await extractErrorMessage(response), response.status);

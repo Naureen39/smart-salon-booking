@@ -25,7 +25,7 @@ app = FastAPI(title="GlowDesk API", version="0.1.0")
 app.state.limiter = limiter
 # slowapi's handler is typed for RateLimitExceeded specifically, while
 # add_exception_handler's signature (contravariantly) wants one that accepts
-# any Exception — a real mypy/slowapi stub mismatch, not a runtime issue:
+# any Exception, a real mypy/slowapi stub mismatch, not a runtime issue:
 # Starlette always calls this handler with the exact class it's registered
 # under.
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]

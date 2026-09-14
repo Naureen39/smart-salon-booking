@@ -1,4 +1,4 @@
-"""Reminder scheduling per docs plan §10.4 — cadence and message urgency scale
+"""Reminder scheduling per docs plan §10.4, cadence and message urgency scale
 with the no-show risk score computed at booking time. Each reminder is its own
 individually-scheduled Celery task (via `apply_async(eta=...)`) rather than a
 periodic sweep, so timing is exact per appointment.
@@ -54,7 +54,7 @@ def schedule_reminders(appointment: Appointment) -> None:
     for offset_hours in REMINDER_OFFSETS_HOURS[tier]:
         reminder_time = appointment.scheduled_start - timedelta(hours=offset_hours)
         if reminder_time <= now:
-            continue  # this offset has already passed — e.g. a short-lead-time booking
+            continue  # this offset has already passed, e.g. a short-lead-time booking
 
         send_appointment_reminder.apply_async(
             args=[
@@ -74,7 +74,7 @@ def _build_message(client: User, service: Service, appointment: Appointment, tie
 
     if tier == "high":
         body += (
-            "\nPlease reply YES to confirm, or let us know if you need to reschedule — "
+            "\nPlease reply YES to confirm, or let us know if you need to reschedule, "
             "otherwise we may need to release your slot to another client.\n"
         )
 
@@ -87,7 +87,7 @@ async def _send_reminder(
 ) -> str:
     # A fresh engine per task invocation, not the app's module-level singleton:
     # Celery's sync task model means each call gets its own asyncio.run() event
-    # loop, and asyncpg connections are loop-bound — reusing a pooled engine
+    # loop, and asyncpg connections are loop-bound, reusing a pooled engine
     # across separate loops raises "attached to a different loop" errors.
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     try:

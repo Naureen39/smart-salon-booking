@@ -8,7 +8,7 @@ from app.db.base import Base
 
 
 class DailyBookingStats(Base):
-    """Nightly rollup of booking activity per day (docs plan §12) — backs the
+    """Nightly rollup of booking activity per day (docs plan §12), backs the
     admin dashboard's overview cards and trend charts without scanning every
     appointment on each page load (the plan's own "<1s from a materialized/
     cached query" performance target)."""

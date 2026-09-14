@@ -1,12 +1,12 @@
 """Text-to-speech (docs plan §9.5).
 
-OpenVoice V2 is the plan's named engine — zero-shot voice cloning from a
-short reference clip of the salon's chosen brand voice — but it ships as a
+OpenVoice V2 is the plan's named engine, zero-shot voice cloning from a
+short reference clip of the salon's chosen brand voice, but it ships as a
 research repo with a manually-downloaded checkpoint and no clean pip wheel,
 so it can't be a default dependency here. OpenVoiceEngine below is a real
 integration point (it checks for the actual checkpoint, reference clip, and
 `openvoice` package, and fails fast with setup instructions if any are
-missing) rather than a fake stub — it activates for real once those are
+missing) rather than a fake stub, it activates for real once those are
 provisioned in a deployment.
 
 PyttsxEngine is the default: a fully working, zero-cost, offline fallback
@@ -42,7 +42,7 @@ def _temp_wav_path() -> Generator[Path, None, None]:
 
 
 class PyttsxEngine:
-    """Offline TTS via the OS's native speech engine — no model download,
+    """Offline TTS via the OS's native speech engine, no model download,
     works out of the box."""
 
     def synthesize(self, text: str) -> bytes:
@@ -56,7 +56,7 @@ class PyttsxEngine:
 class OpenVoiceEngine:
     """Zero-shot voice cloning from settings.tts_reference_voice_path (docs
     plan §9.5). Requires the OpenVoice V2 checkpoint directory, a reference
-    clip, and the `openvoice` package — see README for one-time setup.
+    clip, and the `openvoice` package, see README for one-time setup.
     """
 
     def __init__(self) -> None:
@@ -79,13 +79,13 @@ class OpenVoiceEngine:
             from openvoice.api import ToneColorConverter  # noqa: F401
         except ImportError as exc:
             raise RuntimeError(
-                "The `openvoice` package isn't installed (no prebuilt PyPI wheel — install from "
+                "The `openvoice` package isn't installed (no prebuilt PyPI wheel, install from "
                 "https://github.com/myshell-ai/OpenVoice with `pip install -e .`), then retry."
             ) from exc
 
         raise NotImplementedError(
             "OpenVoice V2 checkpoint, reference clip, and package are all present, but the actual "
-            "inference call isn't wired up in this environment — implement it here against your "
+            "inference call isn't wired up in this environment, implement it here against your "
             "provisioned checkpoint."
         )
 

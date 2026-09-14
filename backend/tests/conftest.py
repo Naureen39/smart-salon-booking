@@ -28,14 +28,54 @@ def _working_hours_for(target_date: date) -> dict:
     return {WEEKDAY_KEYS[target_date.weekday()]: ["09:00-17:00"]}
 
 
+def _test_database_url() -> str:
+    """Forces a "_test"-suffixed database name, never `settings.database_url`
+    verbatim. CI already points DATABASE_URL at a dedicated "glowdesk_test"
+    database (see .github/workflows/ci.yml), so this is a no-op there, but a
+    local dev setup's DATABASE_URL points at the same "glowdesk" database the
+    actual running app and its real data live in. Every test in this file
+    used that URL directly until this was added, meaning `_setup_schema`'s
+    drop_all/create_all and `_clean_state`'s post-test row deletion (below)
+    were destroying real dev data (seeded services, staff, admin accounts,
+    real bookings) every single time the suite ran locally. Found via a real
+    incident: a from-scratch-seeded dev database came back completely empty
+    immediately after an unrelated test run.
+    """
+    base, _, db_name = settings.database_url.rpartition("/")
+    if not db_name.endswith("_test"):
+        db_name = f"{db_name}_test"
+    return f"{base}/{db_name}"
+
+
+TEST_DATABASE_URL = _test_database_url()
+
+
+async def _ensure_test_database_exists() -> None:
+    """Creates the "_test" database on first run. Connects using the
+    original (non-"_test") DATABASE_URL as the admin connection, since that
+    database is guaranteed to already exist (it's the real dev/CI database),
+    rather than assuming a "postgres" maintenance database is reachable.
+    """
+    admin_engine = create_async_engine(settings.database_url, isolation_level="AUTOCOMMIT")
+    test_db_name = TEST_DATABASE_URL.rpartition("/")[2]
+    try:
+        async with admin_engine.connect() as conn:
+            exists = await conn.scalar(text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": test_db_name})
+            if not exists:
+                await conn.execute(text(f'CREATE DATABASE "{test_db_name}"'))
+    finally:
+        await admin_engine.dispose()
+
+
 def _setup_schema() -> None:
     """Runs once per session, on its own throwaway loop (via asyncio.run), fully
-    decoupled from pytest-asyncio's per-test loops — see the `db_engine` fixture
+    decoupled from pytest-asyncio's per-test loops, see the `db_engine` fixture
     below for why each test gets its own engine bound to its own loop instead of
     sharing one across tests."""
 
     async def _run() -> None:
-        setup_engine = create_async_engine(settings.database_url)
+        await _ensure_test_database_exists()
+        setup_engine = create_async_engine(TEST_DATABASE_URL)
         async with setup_engine.begin() as conn:
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist;"))
@@ -55,9 +95,9 @@ def _prepare_database() -> None:
 async def db_engine() -> AsyncGenerator[AsyncEngine, None]:
     """A fresh engine per test, bound to that test's own event loop. asyncpg
     connections are loop-bound, and pytest-asyncio gives each test function its
-    own loop by default — a shared/global engine would end up with pooled
+    own loop by default; a shared/global engine would end up with pooled
     connections attached to a stale loop from an earlier test."""
-    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    engine = create_async_engine(TEST_DATABASE_URL, pool_pre_ping=True)
     yield engine
     await engine.dispose()
 

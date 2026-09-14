@@ -1,4 +1,4 @@
-"""Admin analytics endpoints (docs plan §12) — overview cards and trend
+"""Admin analytics endpoints (docs plan §12), overview cards and trend
 charts read from the daily_booking_stats rollup for speed; service/staff
 breakdowns and the at-risk table are live queries (cheap enough at MVP
 scale, and "at-risk upcoming appointments" specifically needs current data,
@@ -99,7 +99,7 @@ async def get_overview(
             select(func.avg(Appointment.lead_time_hours)).where(
                 Appointment.scheduled_start >= period_start_dt,
                 # Upper-bounded to match total_bookings/no_show_rate's window (the
-                # daily_booking_stats rollup only ever covers already-elapsed days) —
+                # daily_booking_stats rollup only ever covers already-elapsed days):
                 # without this, an unbounded query silently mixes in every future
                 # booking, which can make a "0 bookings this period" card show a
                 # large, unrelated average lead time next to it.
@@ -161,7 +161,7 @@ async def get_service_popularity(
     period_start_dt = datetime.combine(
         datetime.now(UTC).date() - timedelta(days=days), datetime.min.time(), tzinfo=UTC
     )
-    # Upper-bounded to "now" (see the matching fix in get_overview) — without
+    # Upper-bounded to "now" (see the matching fix in get_overview), without
     # this, every future-dated booking leaks into every period, so choosing a
     # different `days` window barely changes the result.
     rows = await db.execute(
@@ -211,7 +211,7 @@ async def get_staff_utilization(
                     Appointment.scheduled_start >= period_start_dt,
                     # Matches _compute_available_hours' own [period_start, period_end)
                     # exclusive range below, so booked_hours / available_hours stay
-                    # comparable — otherwise a future booking inflates booked_hours
+                    # comparable, otherwise a future booking inflates booked_hours
                     # for a window whose available_hours denominator never counted
                     # that day at all.
                     Appointment.scheduled_start < datetime.combine(period_end, datetime.min.time(), tzinfo=UTC),

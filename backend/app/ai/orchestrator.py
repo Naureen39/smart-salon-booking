@@ -1,14 +1,14 @@
-"""Conversation orchestrator (docs plan §9.1) — a slot-filling state machine
+"""Conversation orchestrator (docs plan §9.1), a slot-filling state machine
 where the LLM is invoked only at genuine "edges": free-form input the
 rule-based extractors can't resolve, generating a short booking-confirmation
 message, and grounding an FAQ answer RAG couldn't confidently match. Intent
 keywords, date/service parsing, availability lookup, and slot presentation
-are all deterministic code — zero LLM tokens for the common case.
+are all deterministic code, zero LLM tokens for the common case.
 
 Known scope limits (disclosed, not accidental): once `intent` is set to
 `book_appointment`, the machine assumes every subsequent message continues
 that flow rather than detecting a mid-flow topic switch (e.g. an FAQ aside
-during booking) — handling that robustly would need real context-stacking,
+during booking), handling that robustly would need real context-stacking,
 which is beyond this MVP. Only `book_appointment` and `faq` intents exist;
 reschedule/cancel-by-chat aren't wired in here (those already have their own
 REST endpoints from Phase 2).
@@ -50,7 +50,7 @@ EXTRACTION_SYSTEM_PROMPT = (
     '{"intent": "book_appointment" | "faq" | "unknown", '
     '"slot_updates": {"service": string|null, "date": "YYYY-MM-DD"|null, '
     '"time_window": "morning"|"afternoon"|"evening"|null}, "reply_text": string}. '
-    "reply_text should be short and friendly — a clarifying question if information is missing."
+    "reply_text should be short and friendly, a clarifying question if information is missing."
 )
 
 CONFIRMATION_SYSTEM_PROMPT = (
@@ -117,7 +117,7 @@ def _filter_by_time_window(slots: list[AvailableSlot], window: str | None) -> li
 def _closest_to_requested_time(slots: list[AvailableSlot], requested: time | None) -> list[AvailableSlot]:
     """Sorts by proximity to an explicit requested clock time (e.g. "3pm"), so
     a specific request surfaces the nearest real openings first instead of
-    always the day's earliest slots — `slots` is already in chronological
+    always the day's earliest slots, `slots` is already in chronological
     order when no specific time was requested, so that ordering is preserved.
     """
     if requested is None:
@@ -219,11 +219,23 @@ async def process_turn(
     intent = state.get("intent")
     llm_calls = 0
 
-    if intent is None:
+    # Not `intent is None`: EXTRACTION_SYSTEM_PROMPT explicitly allows the
+    # LLM to answer "unknown" for a genuinely ambiguous message (a bare
+    # greeting has no discernible intent yet), and that value gets persisted
+    # to session.state just like "faq"/"book_appointment" would. Gating the
+    # re-classification attempt on `is None` treated that as a *final*
+    # answer, so once a session picked up "unknown" once, every future
+    # message in it hit the fallback below forever, even an unambiguous
+    # "book a haircut", regardless of what the user actually typed. Found in
+    # manual end-to-end testing: a real conversation got permanently stuck
+    # after its first turn was a bare greeting.
+    if intent not in ("faq", "book_appointment"):
         intent = classify_intent_by_keywords(message)
         if intent is None:
             llm_calls += 1
-            intent, slot_updates, reply_text = await _llm_classify_and_extract(router, db, message)
+            intent, slot_updates, reply_text = await _llm_classify_and_extract(
+                router, db, message, existing_slots=slots
+            )
             slots.update(slot_updates)
             state = {"intent": intent, "slots": slots, "turn_count": state.get("turn_count", 0) + 1}
             await _persist_state(db, session, state)
@@ -244,7 +256,7 @@ async def process_turn(
     state["turn_count"] = state.get("turn_count", 0) + 1
     await _persist_state(db, session, state)
     return TurnResult(
-        reply_text="I'm not sure how to help with that yet — could you tell me more?",
+        reply_text="I'm not sure how to help with that yet. Could you tell me more?",
         llm_calls=llm_calls,
         state=state,
     )
@@ -352,10 +364,18 @@ async def _process_booking_turn(
     available = await compute_available_slots(db, target_date=target_date, duration_minutes=service.duration_minutes)
     available = _filter_by_time_window(available, slots.get("time_window"))
 
-    state["slots"] = slots
-    state["turn_count"] = state.get("turn_count", 0) + 1
-
     if not available:
+        # Drop "date" (and any time preference tied to it) rather than leaving
+        # it in slots: the next message asks "would another day work?" and
+        # expects a fresh date in reply. Keeping the stale, already-confirmed-
+        # unavailable date around meant a reply that didn't parse as a new
+        # date (a plain "yes") fell straight through to the same
+        # availability lookup for the same day, producing the identical
+        # "nothing available" message forever. Found in manual end-to-end
+        # testing: replying "yes" after this message looped indefinitely.
+        slots = {key: value for key, value in slots.items() if key not in ("date", "time_window", "specific_time")}
+        state["slots"] = slots
+        state["turn_count"] = state.get("turn_count", 0) + 1
         await _persist_state(db, session, state)
         return TurnResult(
             reply_text=f"Sorry, there's nothing available for {service.name} on {target_date.isoformat()}. "
@@ -364,11 +384,14 @@ async def _process_booking_turn(
             state=state,
         )
 
+    state["slots"] = slots
+    state["turn_count"] = state.get("turn_count", 0) + 1
+
     requested_time = time.fromisoformat(slots["specific_time"]) if slots.get("specific_time") else None
     top_options = _closest_to_requested_time(available, requested_time)[:3]
 
     # Only worth naming the location per-option when the presented slots
-    # actually span more than one — the common single-location case (and any
+    # actually span more than one, the common single-location case (and any
     # multi-location business whose top matches happen to share one) stays as
     # plain times, so this never adds noise for the setup most deployments
     # actually have. Naming it also disambiguates two slots that land on the

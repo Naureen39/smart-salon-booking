@@ -45,7 +45,7 @@ def create_access_token(user_id: uuid.UUID, role: str) -> str:
 
 
 def create_refresh_token(user_id: uuid.UUID, role: str) -> tuple[str, str]:
-    """Returns (token, jti) — the jti is the allowlist key the caller stores in Redis."""
+    """Returns (token, jti), the jti is the allowlist key the caller stores in Redis."""
     jti = str(uuid.uuid4())
     token = _create_token(str(user_id), role, "refresh", timedelta(days=settings.refresh_token_expire_days), jti=jti)
     return token, jti

@@ -39,7 +39,7 @@ def test_train_raises_when_auc_below_required_minimum(tmp_path: Path, small_data
     with pytest.raises(ValueError, match="AUC"):
         train_and_persist_models(
             small_dataset_path,
-            min_auc=0.999,  # unreachable on this small sample — forces the guard to fire
+            min_auc=0.999,  # unreachable on this small sample, forces the guard to fire
             gbm_path=tmp_path / "gbm.joblib",
             logreg_path=tmp_path / "logreg.joblib",
         )
@@ -47,7 +47,7 @@ def test_train_raises_when_auc_below_required_minimum(tmp_path: Path, small_data
 
 def test_generator_produces_no_trivial_leakage(small_dataset_path: Path) -> None:
     # A perfect (or near-perfect) AUC on synthetic data almost always means the
-    # label leaked into a feature — guard against ever reintroducing that bug.
+    # label leaked into a feature, guard against ever reintroducing that bug.
     gbm_path = small_dataset_path.parent / "leak_check_gbm.joblib"
     logreg_path = small_dataset_path.parent / "leak_check_logreg.joblib"
     report = train_and_persist_models(small_dataset_path, min_auc=None, gbm_path=gbm_path, logreg_path=logreg_path)
