@@ -50,12 +50,14 @@ EXTRACTION_SYSTEM_PROMPT = (
     '{"intent": "book_appointment" | "faq" | "unknown", '
     '"slot_updates": {"service": string|null, "date": "YYYY-MM-DD"|null, '
     '"time_window": "morning"|"afternoon"|"evening"|null}, "reply_text": string}. '
-    "reply_text should be short and friendly, a clarifying question if information is missing."
+    "reply_text should be short and friendly, a clarifying question if information is missing. "
+    "Do not use an em dash (—) in reply_text; use a period or comma instead."
 )
 
 CONFIRMATION_SYSTEM_PROMPT = (
     "You are a friendly salon booking assistant. Write one or two brief, warm sentences confirming a "
-    "just-booked appointment. No placeholders, no brackets."
+    "just-booked appointment. No placeholders, no brackets. Do not use an em dash (—); use a period or "
+    "comma instead."
 )
 # "one or two brief sentences", not a numeric word count: a numeric
 # constraint like "under 40 words" was observed, in manual end-to-end
@@ -67,8 +69,21 @@ CONFIRMATION_SYSTEM_PROMPT = (
 FAQ_GROUNDING_SYSTEM_PROMPT = (
     "You are a salon's FAQ assistant. Answer the user's question using ONLY the context below, in one "
     "or two brief sentences. If the context doesn't contain the answer, say you'll check with staff "
-    "and follow up."
+    "and follow up. Do not use an em dash (—); use a period or comma instead."
 )
+
+
+def _sanitize_llm_reply(text: str) -> str:
+    """A style instruction in the system prompt above asks the model not to
+    use an em dash, but that's advice, not a guarantee, an LLM's free-form
+    output isn't otherwise under this codebase's control the way a static
+    string is. Found in manual end-to-end testing: a real booking
+    confirmation came back as "...12:30 PM—looking forward to seeing you
+    then!", a real em dash in genuinely user-facing chat copy. This is the
+    actual guarantee: every LLM-generated reply is sanitized before it ever
+    reaches a user, regardless of what the model did.
+    """
+    return text.replace("—", ", ").replace("  ", " ")
 
 
 @dataclass
@@ -173,25 +188,27 @@ async def _llm_classify_and_extract(
     intent = parsed.get("intent") or "book_appointment"
     slot_updates = {key: value for key, value in (parsed.get("slot_updates") or {}).items() if value}
     reply_text = parsed.get("reply_text") or "Could you tell me more about what you'd like to book?"
-    return intent, slot_updates, reply_text
+    return intent, slot_updates, _sanitize_llm_reply(reply_text)
 
 
 async def _generate_confirmation_message(
     router: LLMRouter, db: AsyncSession, service_name: str, start: datetime
 ) -> str:
     user_message = f"Service: {service_name}\nDate/time: {start.strftime('%A, %B %d at %I:%M %p')}"
-    return await router.complete(
+    text = await router.complete(
         db, system=CONFIRMATION_SYSTEM_PROMPT, user=user_message, purpose="booking_confirmation", max_tokens=100
     )
+    return _sanitize_llm_reply(text)
 
 
 def _make_faq_llm_fallback(router: LLMRouter, db: AsyncSession):
     async def _fallback(query: str, matches: list[FaqMatch]) -> str:
         context = "\n".join(f"Q: {match.question}\nA: {match.answer}" for match in matches)
         user_message = f"Context:\n{context}\n\nQuestion: {query}"
-        return await router.complete(
+        text = await router.complete(
             db, system=FAQ_GROUNDING_SYSTEM_PROMPT, user=user_message, purpose="faq_grounded_answer", max_tokens=200
         )
+        return _sanitize_llm_reply(text)
 
     return _fallback
 
@@ -335,7 +352,27 @@ async def _process_booking_turn(
     if missing:
         if not matched_service and not parsed_date and not time_window:
             llm_calls += 1
-            _, slot_updates, reply_text = await _llm_classify_and_extract(router, db, message, existing_slots=slots)
+            detected_intent, slot_updates, reply_text = await _llm_classify_and_extract(
+                router, db, message, existing_slots=slots
+            )
+            # A genuine FAQ aside mid-booking ("actually what are your
+            # hours?") lands here too, since it names no service/date/time.
+            # Answering it with this call's own free-form reply_text means an
+            # ungrounded LLM guess at the answer, found in manual end-to-end
+            # testing to confidently state business hours that don't match
+            # the real seeded FAQ answer. Routing through the same
+            # RAG-grounded FAQ path the top-level "faq" intent uses instead
+            # answers from the actual knowledge base (or its own grounded
+            # fallback), and booking progress (`slots`) is left untouched so
+            # the flow can resume on the next message.
+            if detected_intent == "faq":
+                answer = await answer_faq(db, message, llm_fallback=_make_faq_llm_fallback(router, db))
+                if answer.llm_used:
+                    llm_calls += 1
+                state["slots"] = slots
+                state["turn_count"] = state.get("turn_count", 0) + 1
+                await _persist_state(db, session, state)
+                return TurnResult(reply_text=answer.text, llm_calls=llm_calls, state=state)
             slots.update(slot_updates)
             missing = [slot_name for slot_name in REQUIRED_SLOTS if not slots.get(slot_name)]
             state["slots"] = slots

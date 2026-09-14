@@ -14,9 +14,9 @@ import asyncio
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from jose import JWTError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai.orchestrator import process_turn
 from app.ai.stt import pcm16_to_wav_bytes, transcribe_wav_bytes
@@ -27,7 +27,7 @@ from app.core.redis import get_redis_client
 from app.core.security import decode_token
 from app.db.models.conversation_session import ConversationSession
 from app.db.models.user import User
-from app.db.session import async_session_factory
+from app.db.session import get_db
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 settings = get_settings()
@@ -64,7 +64,7 @@ class UtteranceBuffer:
         return audio
 
 
-async def _authenticate(token: str) -> User | None:
+async def _authenticate(db: AsyncSession, token: str) -> User | None:
     try:
         payload = decode_token(token)
     except JWTError:
@@ -75,20 +75,10 @@ async def _authenticate(token: str) -> User | None:
     if subject is None:
         return None
 
-    # A fresh engine, not the app's module-level one: this runs once per WS
-    # connection rather than per-request, so it doesn't share the request/
-    # response DI cycle the rest of the app uses, creating its own engine
-    # keeps it correct under any event-loop lifecycle (tests included).
-    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
-    try:
-        session_factory = async_sessionmaker(engine, expire_on_commit=False)
-        async with session_factory() as db:
-            user = await db.get(User, uuid.UUID(subject))
-            if user is None or not user.is_active:
-                return None
-            return user
-    finally:
-        await engine.dispose()
+    user = await db.get(User, uuid.UUID(subject))
+    if user is None or not user.is_active:
+        return None
+    return user
 
 
 async def _send_reply_audio(websocket: WebSocket, tts_engine: TTSEngine, text: str) -> None:
@@ -111,59 +101,60 @@ async def _is_over_connection_limit(client_ip: str | None) -> bool:
 
 
 @router.websocket("/{session_id}")
-async def voice_conversation(websocket: WebSocket, session_id: uuid.UUID, token: str = Query(...)) -> None:
+async def voice_conversation(
+    websocket: WebSocket, session_id: uuid.UUID, token: str = Query(...), db: AsyncSession = Depends(get_db)
+) -> None:
     client_ip = websocket.client.host if websocket.client else None
     if await _is_over_connection_limit(client_ip):
         await websocket.close(code=4429)
         return
 
-    user = await _authenticate(token)
+    user = await _authenticate(db, token)
     if user is None:
         await websocket.close(code=4401)
         return
 
-    async with async_session_factory() as db:
-        session = await db.get(ConversationSession, session_id)
-        if session is None or session.client_id != user.id:
-            await websocket.close(code=4404)
-            return
+    session = await db.get(ConversationSession, session_id)
+    if session is None or session.client_id != user.id:
+        await websocket.close(code=4404)
+        return
 
-        await websocket.accept()
-        vad = VoiceActivityDetector(sample_rate=SAMPLE_RATE)
-        utterance = UtteranceBuffer()
-        tts_engine = get_tts_engine()
-        playback_task: asyncio.Task[None] | None = None
+    await websocket.accept()
+    vad = VoiceActivityDetector(sample_rate=SAMPLE_RATE)
+    utterance = UtteranceBuffer()
+    tts_engine = get_tts_engine()
+    playback_task: asyncio.Task[None] | None = None
 
-        try:
-            while True:
-                frame = await websocket.receive_bytes()
-                step = vad.frame_bytes
-                for i in range(0, len(frame) - step + 1, step):
-                    chunk = frame[i : i + step]
-                    is_speech = vad.is_speech(chunk)
+    try:
+        while True:
+            frame = await websocket.receive_bytes()
+            step = vad.frame_bytes
+            for i in range(0, len(frame) - step + 1, step):
+                chunk = frame[i : i + step]
+                is_speech = vad.is_speech(chunk)
 
-                    if is_speech and playback_task is not None and not playback_task.done():
-                        playback_task.cancel()
-                        playback_task = None
+                if is_speech and playback_task is not None and not playback_task.done():
+                    playback_task.cancel()
+                    playback_task = None
 
-                    if utterance.add_frame(chunk, is_speech):
-                        pcm_audio = utterance.pop()
-                        wav_audio = pcm16_to_wav_bytes(pcm_audio, sample_rate=SAMPLE_RATE)
-                        transcript = transcribe_wav_bytes(wav_audio)
-                        if not transcript:
-                            continue
+                if utterance.add_frame(chunk, is_speech):
+                    pcm_audio = utterance.pop()
+                    wav_audio = pcm16_to_wav_bytes(pcm_audio, sample_rate=SAMPLE_RATE)
+                    transcript = transcribe_wav_bytes(wav_audio)
+                    if not transcript:
+                        continue
 
-                        result = await process_turn(db, session=session, message=transcript, client_id=user.id)
-                        await websocket.send_json(
-                            {
-                                "type": "turn",
-                                "transcript": transcript,
-                                "reply_text": result.reply_text,
-                                "appointment_id": result.appointment_id,
-                            }
-                        )
-                        playback_task = asyncio.create_task(_send_reply_audio(websocket, tts_engine, result.reply_text))
-        except WebSocketDisconnect:
-            if playback_task is not None:
-                playback_task.cancel()
-            return
+                    result = await process_turn(db, session=session, message=transcript, client_id=user.id)
+                    await websocket.send_json(
+                        {
+                            "type": "turn",
+                            "transcript": transcript,
+                            "reply_text": result.reply_text,
+                            "appointment_id": result.appointment_id,
+                        }
+                    )
+                    playback_task = asyncio.create_task(_send_reply_audio(websocket, tts_engine, result.reply_text))
+    except WebSocketDisconnect:
+        if playback_task is not None:
+            playback_task.cancel()
+        return

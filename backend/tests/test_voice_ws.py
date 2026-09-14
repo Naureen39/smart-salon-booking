@@ -1,4 +1,5 @@
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.voice import UtteranceBuffer, _authenticate
 from app.core.security import create_access_token, create_refresh_token
@@ -39,17 +40,17 @@ def test_pop_returns_buffered_audio_and_resets_state() -> None:
 
 
 @pytest.mark.parametrize("bad_token", ["not-a-real-token", ""])
-async def test_authenticate_rejects_invalid_token(bad_token: str) -> None:
-    assert await _authenticate(bad_token) is None
+async def test_authenticate_rejects_invalid_token(db_session: AsyncSession, bad_token: str) -> None:
+    assert await _authenticate(db_session, bad_token) is None
 
 
-async def test_authenticate_accepts_valid_access_token(client_user: User) -> None:
+async def test_authenticate_accepts_valid_access_token(db_session: AsyncSession, client_user: User) -> None:
     token = create_access_token(client_user.id, client_user.role)
-    result = await _authenticate(token)
+    result = await _authenticate(db_session, token)
     assert result is not None
     assert result.id == client_user.id
 
 
-async def test_authenticate_rejects_refresh_token(client_user: User) -> None:
+async def test_authenticate_rejects_refresh_token(db_session: AsyncSession, client_user: User) -> None:
     refresh_token, _ = create_refresh_token(client_user.id, client_user.role)
-    assert await _authenticate(refresh_token) is None
+    assert await _authenticate(db_session, refresh_token) is None

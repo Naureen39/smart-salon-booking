@@ -209,6 +209,38 @@ async def test_confirmation_message_uses_the_booked_slots_own_offset(
     assert "12:00 PM" in confirmation_calls[0]
 
 
+async def test_confirmation_message_never_contains_an_em_dash(
+    db_session: AsyncSession, client_user: User, service: Service, staff: StaffProfile, target_date: date
+) -> None:
+    """Regression test for a real bug found in manual end-to-end testing: the
+    LLM generated a genuine confirmation message containing a real em dash
+    ("...12:30 PM—looking forward to seeing you then!"), despite the system
+    prompt asking it not to. A style instruction in a prompt is advice, not a
+    guarantee, this project bans the character outright, so the orchestrator
+    sanitizes every LLM-generated reply rather than trusting the model to
+    comply on its own.
+    """
+    session = ConversationSession(client_id=client_user.id, channel="chat", state={})
+    db_session.add(session)
+    await db_session.commit()
+    await db_session.refresh(session)
+
+    router = LLMRouter(
+        primary=_FakeProvider(
+            "groq",
+            [LLMResponse(text="You're all set—see you then!", tokens_in=50, tokens_out=10)],
+        ),
+        fallback=_FakeProvider("gemini", []),
+    )
+    message = f"I'd like to book a {service.name} on {target_date.isoformat()} in the morning"
+    first = await process_turn(db_session, session=session, message=message, client_id=client_user.id, router=router)
+    second = await process_turn(db_session, session=session, message="1", client_id=client_user.id, router=router)
+
+    assert "—" not in first.reply_text
+    assert "—" not in second.reply_text
+    assert "You're all set, see you then!" == second.reply_text
+
+
 async def test_ambiguous_input_triggers_exactly_one_llm_call(
     db_session: AsyncSession, client_user: User
 ) -> None:
@@ -317,6 +349,62 @@ async def test_faq_question_answered_without_llm_when_confident(
     assert result.reply_text == doc.answer
     # FAQ is a stateless aside, session resets so the next message starts fresh.
     assert result.state["intent"] is None
+
+
+async def test_mid_booking_faq_aside_answers_from_the_real_faq_and_preserves_booking(
+    db_session: AsyncSession, client_user: User, service: Service
+) -> None:
+    """Regression test for a real bug found in manual end-to-end testing: a
+    message mid-booking that names no service/date/time ("actually, what are
+    your hours?") falls to the extraction LLM for lack of anything rule-based
+    to go on, and that call's own free-form reply_text was used verbatim as
+    the answer. The extraction LLM has no grounding in the real FAQ
+    knowledge base, and in a real conversation it confidently stated hours
+    that didn't match the actual seeded answer, a hallucination handed
+    straight to the user. Since EXTRACTION_SYSTEM_PROMPT lets this call
+    classify intent as "faq" too, routing to the same RAG-grounded answering
+    path the top-level "faq" intent uses (instead of trusting this call's own
+    guess) fixes it, and booking progress must survive the aside so the flow
+    can resume afterward.
+    """
+    doc = FaqDocument(
+        question="What are your hours?",
+        answer="We're open Tuesday to Saturday, 9 to 6.",
+        embedding=embed_passage("What are your hours?"),
+    )
+    db_session.add(doc)
+
+    session = ConversationSession(
+        client_id=client_user.id,
+        channel="chat",
+        state={"intent": "book_appointment", "slots": {"service": service.name}, "turn_count": 1},
+    )
+    db_session.add(session)
+    await db_session.commit()
+    await db_session.refresh(session)
+
+    router = LLMRouter(
+        primary=_FakeProvider(
+            "groq",
+            [
+                LLMResponse(
+                    text='{"intent": "faq", "slot_updates": {}, '
+                    '"reply_text": "We are open every day 24 hours!"}',
+                    tokens_in=50,
+                    tokens_out=15,
+                )
+            ],
+        ),
+        fallback=_FakeProvider("gemini", []),
+    )
+
+    result = await process_turn(
+        db_session, session=session, message="actually, what are your hours?", client_id=client_user.id, router=router
+    )
+
+    assert result.reply_text == doc.answer
+    assert result.state["intent"] == "book_appointment"
+    assert result.state["slots"] == {"service": service.name}
 
 
 async def test_missing_slot_prompts_without_llm(
